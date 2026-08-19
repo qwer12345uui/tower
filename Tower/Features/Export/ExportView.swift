@@ -33,7 +33,6 @@ struct ExportView: View {
             .padding(.top, 12)
             .padding(.bottom, 18)
         }
-        .glassTabBarScrollBehavior()
         .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
         .navigationTitle("生成与导出")
         .navigationBarTitleDisplayMode(.inline)

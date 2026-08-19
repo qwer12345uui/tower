@@ -51,14 +51,12 @@ struct SubscriptionsView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 34)
             }
-            .glassTabBarScrollBehavior()
             .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
             .navigationTitle("我的订阅")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        model.isGlassTabBarCollapsed = false
                         withAnimation(reduceMotion ? .easeOut(duration: 0.20) : .spring(response: 0.42, dampingFraction: 0.88)) {
                             proxy.scrollTo(SubscriptionScrollTarget.top, anchor: .top)
                         }

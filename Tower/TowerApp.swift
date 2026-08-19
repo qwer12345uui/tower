@@ -77,45 +77,28 @@ struct AppRootView: View {
             TowerNavigation {
                 SubscriptionsView()
             }
+            .tabItem {
+                Label(AppTab.subscriptions.title, systemImage: AppTab.subscriptions.symbol)
+            }
             .tag(AppTab.subscriptions)
 
             TowerNavigation {
                 RulesView()
+            }
+            .tabItem {
+                Label(AppTab.rules.title, systemImage: AppTab.rules.symbol)
             }
             .tag(AppTab.rules)
 
             TowerNavigation {
                 ExportView()
             }
+            .tabItem {
+                Label(AppTab.export.title, systemImage: AppTab.export.symbol)
+            }
             .tag(AppTab.export)
         }
-        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-        .onChange(of: model.selectedTab) { _ in
-            model.isGlassTabBarCollapsed = false
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear
-                .frame(height: 70)
-                .accessibilityHidden(true)
-        }
-        .overlay(alignment: .bottom) {
-            GlassTabBar(selection: Binding(
-                get: { model.selectedTab },
-                set: { tab in
-                    model.selectedTab = tab
-                    model.isGlassTabBarCollapsed = false
-                }
-            ))
-            .padding(.horizontal, 22)
-            .padding(.bottom, 6)
-            .offset(y: model.isGlassTabBarCollapsed ? 102 : 0)
-            .opacity(model.isGlassTabBarCollapsed ? 0 : 1)
-            .allowsHitTesting(!model.isGlassTabBarCollapsed)
-            .animation(
-                reduceMotion ? .easeOut(duration: 0.14) : .spring(response: 0.30, dampingFraction: 0.88),
-                value: model.isGlassTabBarCollapsed
-            )
-        }
+        .tint(.accentColor)
         .towerToast()
     }
 }

@@ -32,7 +32,6 @@ struct RulesView: View {
             .padding(.top, 12)
             .padding(.bottom, 34)
         }
-        .glassTabBarScrollBehavior()
         .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
         .navigationTitle("分流规则")
         .navigationBarTitleDisplayMode(.inline)
