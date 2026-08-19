@@ -1,8 +1,20 @@
 import SwiftUI
+import UIKit
 
 @main
 struct TowerApp: App {
     @StateObject private var model = AppModel()
+
+    init() {
+        let navigationBar = UINavigationBarAppearance()
+        navigationBar.configureWithOpaqueBackground()
+        navigationBar.backgroundColor = .systemBackground
+        navigationBar.shadowColor = UIColor.separator.withAlphaComponent(0.42)
+
+        UINavigationBar.appearance().standardAppearance = navigationBar
+        UINavigationBar.appearance().scrollEdgeAppearance = navigationBar
+        UINavigationBar.appearance().compactAppearance = navigationBar
+    }
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 

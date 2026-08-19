@@ -48,7 +48,7 @@ struct SubscriptionsView: View {
                     }
                 }
                 .padding(.horizontal, TowerTheme.pagePadding)
-                .padding(.top, 12)
+                .padding(.top, 20)
                 .padding(.bottom, 34)
             }
             .glassTabBarScrollBehavior()
@@ -64,7 +64,11 @@ struct SubscriptionsView: View {
                         }
                     } label: {
                         Image(systemName: "arrow.up.to.line")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .padding(.leading, 6)
                     .accessibilityLabel("回到顶部")
                     .accessibilityHint("将我的订阅回到首屏")
                     .accessibilityIdentifier("scroll-to-subscriptions-top")
@@ -75,7 +79,11 @@ struct SubscriptionsView: View {
                         isAddSourcePresented = true
                     } label: {
                         Image(systemName: "plus")
+                            .font(.system(size: 20, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .padding(.trailing, 6)
                     .accessibilityLabel("添加订阅或节点")
                     .accessibilityIdentifier("add-source-button")
                 }
