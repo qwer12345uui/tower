@@ -65,22 +65,32 @@ struct AppRootView: View {
             TowerNavigation {
                 SubscriptionsView()
             }
-            .tabItem { Label(AppTab.subscriptions.title, systemImage: AppTab.subscriptions.symbol) }
             .tag(AppTab.subscriptions)
 
             TowerNavigation {
                 RulesView()
             }
-            .tabItem { Label(AppTab.rules.title, systemImage: AppTab.rules.symbol) }
             .tag(AppTab.rules)
 
             TowerNavigation {
                 ExportView()
             }
-            .tabItem { Label(AppTab.export.title, systemImage: AppTab.export.symbol) }
             .tag(AppTab.export)
         }
-        .tint(.accentColor)
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: 78)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .bottom) {
+            GlassTabBar(selection: Binding(
+                get: { model.selectedTab },
+                set: { model.selectedTab = $0 }
+            ))
+            .padding(.horizontal, 22)
+            .padding(.bottom, 8)
+        }
         .towerToast()
     }
 }
