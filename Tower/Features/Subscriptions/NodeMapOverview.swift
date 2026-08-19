@@ -259,7 +259,7 @@ struct ExpandableNodeRow: View {
                             Text(node.protocolSummary)
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
-                                .tracking(0.18)
+                                .kerning(0.18)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.82)
                         }

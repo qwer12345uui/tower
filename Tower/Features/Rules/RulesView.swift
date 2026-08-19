@@ -280,7 +280,7 @@ private struct RulesOverviewCard: View {
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background(
-                        TowerTheme.color(named: tintName).gradient,
+                        TowerTheme.color(named: tintName),
                         in: RoundedRectangle(cornerRadius: 15, style: .continuous)
                     )
             }

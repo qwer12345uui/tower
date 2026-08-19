@@ -567,12 +567,13 @@ struct ProxyNode: Identifiable, Codable, Hashable {
             congestionControl ?? "", udpRelayMode ?? "", portHopping ?? "",
             upMbps.map(String.init) ?? "", downMbps.map(String.init) ?? ""
         ])
-        fields.append(contentsOf: [
+        let wireGuardFields: [String] = [
             wireGuardPrivateKey ?? "", wireGuardPublicKey ?? "", wireGuardPreSharedKey ?? "",
             wireGuardIPv4 ?? "", wireGuardIPv6 ?? "", wireGuardAllowedIPs ?? "",
-            wireGuardReserved ?? "", wireGuardMTU.map(String.init) ?? "",
-            wireGuardPersistentKeepalive.map(String.init) ?? "", wireGuardDNS ?? ""
-        ])
+            wireGuardReserved ?? "", wireGuardMTU.map { String($0) } ?? "",
+            wireGuardPersistentKeepalive.map { String($0) } ?? "", wireGuardDNS ?? ""
+        ]
+        fields.append(contentsOf: wireGuardFields)
         return fields.joined(separator: "\u{1F}")
     }
 
