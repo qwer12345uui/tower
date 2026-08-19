@@ -55,6 +55,20 @@ struct SubscriptionsView: View {
             .background(TowerTheme.background.ignoresSafeArea())
             .navigationTitle("我的订阅")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        model.isGlassTabBarCollapsed = false
+                        withAnimation(reduceMotion ? .easeOut(duration: 0.20) : .spring(response: 0.42, dampingFraction: 0.88)) {
+                            proxy.scrollTo(SubscriptionScrollTarget.top, anchor: .top)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.to.line")
+                    }
+                    .accessibilityLabel("回到顶部")
+                    .accessibilityHint("将我的订阅回到首屏")
+                    .accessibilityIdentifier("scroll-to-subscriptions-top")
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isAddSourcePresented = true

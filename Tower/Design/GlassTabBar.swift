@@ -12,7 +12,7 @@ struct GlassTabBar: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             ForEach(AppTab.allCases) { tab in
                 GlassTabButton(
                     tab: tab,
@@ -26,7 +26,7 @@ struct GlassTabBar: View {
                 )
             }
         }
-        .padding(6)
+        .padding(5)
         .background(glassBackground)
         .overlay {
             Capsule()
@@ -69,14 +69,14 @@ private struct GlassTabButton: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: 18, weight: isSelected ? .bold : .semibold))
-                    .frame(height: 22)
+                    .font(.system(size: 17, weight: isSelected ? .bold : .semibold))
+                    .frame(height: 20)
                 Text(tab.title)
                     .font(.caption2.weight(isSelected ? .bold : .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
-            .frame(maxWidth: .infinity, minHeight: 55)
+            .frame(maxWidth: .infinity, minHeight: 52)
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
             .background {
                 if isSelected {

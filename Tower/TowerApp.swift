@@ -83,7 +83,7 @@ struct AppRootView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear
-                .frame(height: 78)
+                .frame(height: 70)
                 .accessibilityHidden(true)
         }
         .overlay(alignment: .bottom) {
@@ -95,7 +95,7 @@ struct AppRootView: View {
                 }
             ))
             .padding(.horizontal, 22)
-            .padding(.bottom, 8)
+            .padding(.bottom, 6)
             .offset(y: model.isGlassTabBarCollapsed ? 102 : 0)
             .opacity(model.isGlassTabBarCollapsed ? 0 : 1)
             .allowsHitTesting(!model.isGlassTabBarCollapsed)
