@@ -51,6 +51,7 @@ struct SubscriptionsView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 34)
             }
+            .glassTabBarScrollBehavior()
             .background(TowerTheme.background.ignoresSafeArea())
             .navigationTitle("我的订阅")
             .toolbar {

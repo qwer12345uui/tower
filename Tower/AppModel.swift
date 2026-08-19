@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
     @Published var selectedPresetID: String = AppModel.defaultRuleSchemeID
     @Published var selectedTarget: ClientTarget = .surge
     @Published var selectedTab: AppTab = .subscriptions
+    @Published var isGlassTabBarCollapsed = false
     @Published var refreshingSourceIDs: Set<UUID> = []
     @Published var nodeLatencies: [UUID: NodeLatencyMeasurement] = [:]
     @Published var latencyTestingNodeIDs: Set<UUID> = []
