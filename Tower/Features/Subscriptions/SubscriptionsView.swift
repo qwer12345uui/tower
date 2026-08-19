@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SubscriptionsView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAddSourcePresented = false
     @State private var pendingDeletion: PendingDeletion?
@@ -54,7 +54,7 @@ struct SubscriptionsView: View {
             .background(TowerTheme.background.ignoresSafeArea())
             .navigationTitle("我的订阅")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         isAddSourcePresented = true
                     } label: {
@@ -92,9 +92,18 @@ struct SubscriptionsView: View {
                         .zIndex(10)
                 }
             }
-            .navigationDestination(item: $nodeFilterRoute) { route in
-                NodeFilterView(initialFocus: route)
-            }
+            .background(
+                NavigationLink(
+                    destination: NodeFilterView(initialFocus: nodeFilterRoute ?? .all),
+                    isActive: Binding(
+                        get: { nodeFilterRoute != nil },
+                        set: { isActive in
+                            if !isActive { nodeFilterRoute = nil }
+                        }
+                    )
+                ) { EmptyView() }
+                .hidden()
+            )
             .confirmationDialog(
                 pendingDeletion?.title ?? String(localized: "确认删除"),
                 isPresented: Binding(
@@ -164,7 +173,7 @@ struct SubscriptionsView: View {
 }
 
 private struct SubscriptionRefreshReportOverlay: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let report: SubscriptionRefreshReport
@@ -302,7 +311,7 @@ private enum PendingDeletion {
 }
 
 private struct EditSubscriptionSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.dismiss) private var dismiss
     let source: SubscriptionSource
     @Binding var nameDraft: SubscriptionNameDraft
@@ -321,13 +330,13 @@ private struct EditSubscriptionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             Form {
                 Section("订阅") {
                     TextField("名称（可选）", text: $nameDraft.text)
                         .textContentType(.organizationName)
-                    TextField("订阅链接", text: $urlString, axis: .vertical)
-                        .lineLimit(2...5)
+                    TextEditor(text: $urlString)
+                        .frame(minHeight: 72)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -390,7 +399,7 @@ private struct EditSubscriptionSheet: View {
 }
 
 private struct SubscriptionOverviewCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let onMetricTap: (SubscriptionOverviewMetric) -> Void
 
     var body: some View {
@@ -489,7 +498,7 @@ private struct SubscriptionEmptyState: View {
 }
 
 private struct SubscriptionCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let source: SubscriptionSource
     let onRefresh: () -> Void
@@ -634,7 +643,6 @@ private struct SubscriptionCard: View {
         }
         .padding(16)
         .towerCard()
-        .sensoryFeedback(.selection, trigger: isExpanded)
         .sheet(item: $sharePayload) { payload in
             SharePayloadSheet(payload: payload)
         }
@@ -647,7 +655,7 @@ private struct SubscriptionCard: View {
 }
 
 private struct LocalNodeCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let node: ProxyNode
     let onEdit: () -> Void
     let onMoveUp: () -> Void

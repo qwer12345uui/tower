@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RulesView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @State private var isImportPresented = false
     @State private var pendingDeletion: RuleScheme?
     @State private var pendingFlowDeletion: CustomRuleFlow?
@@ -35,7 +35,7 @@ struct RulesView: View {
         .background(TowerTheme.background.ignoresSafeArea())
         .navigationTitle("分流规则")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     isImportPresented = true
                 } label: {
@@ -44,7 +44,6 @@ struct RulesView: View {
                 .accessibilityIdentifier("import-rule-scheme")
             }
         }
-        .sensoryFeedback(.selection, trigger: model.selectedPresetID)
         .sheet(isPresented: $isImportPresented) {
             ImportRuleSchemeSheet()
         }
@@ -260,7 +259,7 @@ struct RulesView: View {
 }
 
 private struct RulesOverviewCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -268,12 +267,12 @@ private struct RulesOverviewCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.title2.weight(.bold))
-                        .lineLimit(1, reservesSpace: true)
+                        .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: symbol)
@@ -387,7 +386,7 @@ private struct CustomRuleEditorRequest: Identifiable {
 }
 
 private struct CustomRuleFlowRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let flow: CustomRuleFlow
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -612,7 +611,6 @@ private struct RuleSchemeCard: View {
             RoundedRectangle(cornerRadius: TowerTheme.cornerRadius, style: .continuous)
                 .stroke(isSelected ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1.5)
         }
-        .sensoryFeedback(.selection, trigger: isExpanded)
     }
 
     private var expansionAnimation: Animation {
@@ -636,7 +634,7 @@ private struct RuleSchemeCard: View {
 }
 
 private struct ImportRuleSchemeSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.dismiss) private var dismiss
     @State private var urlString = ""
     @State private var name = ""
@@ -645,11 +643,11 @@ private struct ImportRuleSchemeSheet: View {
     @FocusState private var isURLFocused: Bool
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             Form {
                 Section {
-                    TextField("https://…", text: $urlString, axis: .vertical)
-                        .lineLimit(2...6)
+                    TextEditor(text: $urlString)
+                        .frame(minHeight: 72)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -675,7 +673,6 @@ private struct ImportRuleSchemeSheet: View {
             }
             .navigationTitle("导入规则")
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -690,7 +687,7 @@ private struct ImportRuleSchemeSheet: View {
                 }
             }
             .onAppear { isURLFocused = true }
-            .onChange(of: urlString) { errorMessage = nil }
+            .onChange(of: urlString) { _ in errorMessage = nil }
         }
     }
 
@@ -709,7 +706,7 @@ private struct ImportRuleSchemeSheet: View {
 }
 
 private struct RuleGroupSelectionSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var searchText = ""
@@ -722,7 +719,7 @@ private struct RuleGroupSelectionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             List {
                 Section {
                     Toggle(
@@ -737,7 +734,7 @@ private struct RuleGroupSelectionSheet: View {
                 }
 
                 if visibleGroups.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
+                    TowerUnavailableContentView.search(text: searchText)
                         .listRowBackground(Color.clear)
                 } else {
                     Section {
@@ -773,7 +770,6 @@ private struct RuleGroupSelectionSheet: View {
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: "搜索海外媒体、AI 等"
             )
-            .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("rule-group-selection-list")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -790,7 +786,7 @@ private struct CustomRuleFlowEditor: View {
         case rules
     }
 
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let existingFlow: CustomRuleFlow?
@@ -832,7 +828,7 @@ private struct CustomRuleFlowEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             Form {
                 Section("规则流") {
                     TextField("名称，例如 Tailscale", text: $name)
@@ -875,7 +871,6 @@ private struct CustomRuleFlowEditor: View {
                 ? String(localized: "新增规则流")
                 : String(localized: "编辑规则流"))
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(false)
             .accessibilityIdentifier("custom-rule-flow-editor")
             .toolbar {

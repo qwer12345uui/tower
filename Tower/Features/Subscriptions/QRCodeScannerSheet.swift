@@ -6,20 +6,16 @@ struct QRCodeScannerSheet: View {
     let onScan: (String) -> Void
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             Group {
-                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                    QRCodeScannerView { value in
+                if #available(iOS 16.0, *) {
+                    QRCodeScannerAvailabilityView { value in
                         onScan(value)
                         dismiss()
                     }
                     .ignoresSafeArea(edges: .bottom)
                 } else {
-                    ContentUnavailableView(
-                        "无法使用相机扫码",
-                        systemImage: "camera.fill",
-                        description: Text("请检查相机权限，或返回后粘贴二维码中的链接。")
-                    )
+                    QRCodeScannerUnavailableContent(detail: "请返回后粘贴二维码中的链接。")
                 }
             }
             .navigationTitle("扫描二维码")
@@ -38,14 +34,10 @@ struct QRCodeScannerPreview: View {
 
     var body: some View {
         Group {
-            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                QRCodeScannerView(onScan: onScan)
+            if #available(iOS 16.0, *) {
+                QRCodeScannerAvailabilityView(onScan: onScan)
             } else {
-                ContentUnavailableView(
-                    "无法使用相机扫码",
-                    systemImage: "camera.fill",
-                    description: Text("请检查相机权限，或切换到粘贴识别。")
-                )
+                QRCodeScannerUnavailableContent(detail: "当前系统不支持相机扫码，请切换到粘贴识别。")
             }
         }
         .frame(maxWidth: .infinity, minHeight: 250)
@@ -54,6 +46,32 @@ struct QRCodeScannerPreview: View {
     }
 }
 
+private struct QRCodeScannerUnavailableContent: View {
+    let detail: String
+
+    var body: some View {
+        TowerUnavailableContentView(
+            "无法使用相机扫码",
+            systemImage: "camera.fill",
+            description: Text(detail)
+        )
+    }
+}
+
+@available(iOS 16.0, *)
+private struct QRCodeScannerAvailabilityView: View {
+    let onScan: (String) -> Void
+
+    var body: some View {
+        if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+            QRCodeScannerView(onScan: onScan)
+        } else {
+            QRCodeScannerUnavailableContent(detail: "请检查相机权限，或切换到粘贴识别。")
+        }
+    }
+}
+
+@available(iOS 16.0, *)
 private struct QRCodeScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 

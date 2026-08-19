@@ -119,9 +119,6 @@ struct MetricPill: View {
             Text(value, format: .number)
                 .font(.title2.weight(.bold))
                 .monospacedDigit()
-                .contentTransition(
-                    reduceMotion ? .opacity : .numericText(value: Double(value))
-                )
                 .animation(
                     reduceMotion
                         ? .easeOut(duration: 0.14)
@@ -199,6 +196,5 @@ struct CheckmarkToggleStyle: ToggleStyle {
         .accessibilityAddTraits(.isToggle)
         // Every other choice in the app taps back — the tab bar, the rule
         // list, the client picker. This one was the exception.
-        .sensoryFeedback(.selection, trigger: configuration.isOn)
     }
 }

@@ -84,10 +84,14 @@ App 内置简体中文、繁体中文、英语、日语、韩语、西班牙语�
 ## 运行
 
 1. 使用 Xcode 26 或更新版本打开 `Tower.xcodeproj`。
-2. 选择 iOS 17 或更新版本的模拟器/设备。
+2. 选择 iOS 15.0 或更新版本的真机；模拟器版本需与已安装 Xcode 的运行时匹配。
 3. 运行 `Tower` Scheme。
 
 测试覆盖订阅解析、Clash YAML 嵌套字段、名称优先的国家地区聚合与离线 IP 回退、网络延迟链路、本地规则资源、一键导入 Scheme，以及七种配置生成器。Loon 的 VMess/VLESS/Trojan/Hysteria 2 参数按其[节点文档](https://nsloon.bid/document/node)生成；Surge 的 TLS 与 WebSocket 参数按其[代理策略文档](https://manual.nssurge.com/policy/proxy.html)生成。
+
+## GitHub 在线构建 IPA
+
+项目提供仅可手动启动的 **Build iOS IPA** 工作流，用于在 GitHub 的 macOS 运行器上构建设备版 IPA。工作流不监听推送、不创建 Release，也不会上传 TestFlight 或 App Store Connect。构建完成后，在该次 Actions 运行页的 **Artifacts** 区域下载 IPA 构件；具体下载步骤、开发签名所需 secrets 与 iOS 15 降级边界见 [GitHub 在线构建与下载 IPA](docs/GITHUB_IPA_BUILD.md)。
 
 ## 已知边界
 

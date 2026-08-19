@@ -124,7 +124,6 @@ struct WelcomeView: View {
             }
             .buttonStyle(ResponsivePressButtonStyle())
             // The commit moment, and the only haptic on this screen.
-            .sensoryFeedback(.success, trigger: didContinue)
             .padding(.horizontal, 26)
             .frame(maxWidth: readableContentWidth)
             .frame(maxWidth: .infinity)

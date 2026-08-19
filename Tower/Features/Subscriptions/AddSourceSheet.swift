@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct AddSourceSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.dismiss) private var dismiss
     private let editingNode: ProxyNode?
     @State private var name = ""
@@ -58,7 +58,7 @@ struct AddSourceSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        TowerNavigation {
             Form {
                 if editingNode == nil {
                     sourceModePicker
@@ -90,7 +90,6 @@ struct AddSourceSheet: View {
             }
             .navigationTitle(editingNode == nil ? String(localized: "添加订阅或节点") : String(localized: "编辑"))
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
@@ -112,10 +111,10 @@ struct AddSourceSheet: View {
             .onAppear {
                 if editingNode == nil { requestClipboardContent() }
             }
-            .onChange(of: sourceValue) {
+            .onChange(of: sourceValue) { _ in
                 errorMessage = nil
             }
-            .onChange(of: entryMode) {
+            .onChange(of: entryMode) { _ in
                 focusedField = nil
                 errorMessage = nil
             }
@@ -154,8 +153,8 @@ struct AddSourceSheet: View {
     @ViewBuilder
     private var pasteSections: some View {
         Section {
-            TextField("粘贴订阅链接或节点协议", text: $sourceValue, axis: .vertical)
-                .lineLimit(3...10)
+            TextEditor(text: $sourceValue)
+                .frame(minHeight: 120)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -231,7 +230,7 @@ struct AddSourceSheet: View {
                     Text(kind.title).tag(kind)
                 }
             }
-            .onChange(of: manualDraft.kind) { _, selectedKind in
+            .onChange(of: manualDraft.kind) { selectedKind in
                 manualDraft.applyDefaults(for: selectedKind)
             }
         }
@@ -480,7 +479,11 @@ struct AddSourceSheet: View {
                         }
                     }
                 } else {
-                    LabeledContent("安全方式", value: "TLS")
+                    HStack {
+                        Text("安全方式")
+                        Spacer()
+                        Text("TLS").foregroundStyle(.secondary)
+                    }
                 }
 
                 if usesTLSSettings {

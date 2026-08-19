@@ -1,79 +1,78 @@
+import Combine
 import Foundation
-import Observation
 
 @MainActor
-@Observable
-final class AppModel {
+final class AppModel: ObservableObject {
     static let defaultRuleSchemeID = "acl4ssr-default"
 
     // Defaults so `apply(_:)` can be an instance method: a class cannot call
     // one until every stored property is initialised.
-    var subscriptions: [SubscriptionSource] = []
-    var nodes: [ProxyNode] = []
-    var selectedPresetID: String = AppModel.defaultRuleSchemeID
-    var selectedTarget: ClientTarget = .surge
-    var selectedTab: AppTab = .subscriptions
-    var refreshingSourceIDs: Set<UUID> = []
-    var nodeLatencies: [UUID: NodeLatencyMeasurement] = [:]
-    var latencyTestingNodeIDs: Set<UUID> = []
-    var selectedLatencyTestMode: NodeLatencyTestMode = .automatic
-    var nodeIPCountryCodes: [UUID: String] = [:]
-    var countryResolutionCompletedNodeIDs: Set<UUID> = []
-    var toast: ToastMessage?
-    var subscriptionRefreshReport: SubscriptionRefreshReport?
+    @Published var subscriptions: [SubscriptionSource] = []
+    @Published var nodes: [ProxyNode] = []
+    @Published var selectedPresetID: String = AppModel.defaultRuleSchemeID
+    @Published var selectedTarget: ClientTarget = .surge
+    @Published var selectedTab: AppTab = .subscriptions
+    @Published var refreshingSourceIDs: Set<UUID> = []
+    @Published var nodeLatencies: [UUID: NodeLatencyMeasurement] = [:]
+    @Published var latencyTestingNodeIDs: Set<UUID> = []
+    @Published var selectedLatencyTestMode: NodeLatencyTestMode = .automatic
+    @Published var nodeIPCountryCodes: [UUID: String] = [:]
+    @Published var countryResolutionCompletedNodeIDs: Set<UUID> = []
+    @Published var toast: ToastMessage?
+    @Published var subscriptionRefreshReport: SubscriptionRefreshReport?
     /// The running full refresh, so a second pull joins it rather than
     /// starting a rival queue. Not observed by any view.
-    @ObservationIgnored private var refreshAllTask: Task<Void, Never>?
+    private var refreshAllTask: Task<Void, Never>?
     /// The persistent service credential is deliberately unrelated to every
     /// airport URL. Only this random token appears in LAN sharing links.
-    var lanSharingToken = LANSubscriptionAccessTokenStore.loadOrCreate()
-    var lanSharingURL: URL?
-    var isLANSharingStarting = false
-    var renewalRemindersEnabled = false
-    var isUpdatingRenewalReminders = false
-    var clientOrder = ClientTarget.allCases
-    var appendSubscriptionNameToNodes = false
-    var filterSubscriptionInfoNodes = false
+    @Published var lanSharingToken = LANSubscriptionAccessTokenStore.loadOrCreate()
+    @Published var lanSharingURL: URL?
+    @Published var isLANSharingStarting = false
+    @Published var renewalRemindersEnabled = false
+    @Published var isUpdatingRenewalReminders = false
+    @Published var clientOrder = ClientTarget.allCases
+    @Published var appendSubscriptionNameToNodes = false
+    @Published var filterSubscriptionInfoNodes = false
     /// Refresh enabled subscriptions when the app opens. Off by default like
     /// every other feature here that reaches the network — the promise the app
     /// makes on first launch is that it goes online when you say so.
-    var autoRefreshOnOpen = false
-    @ObservationIgnored private var lastAutoRefreshAt: Date?
-    var configurationName = TowerBrand.localizedName
-    var preferRuleSets = false
+    @Published var autoRefreshOnOpen = false
+    private var lastAutoRefreshAt: Date?
+    @Published var configurationName = TowerBrand.localizedName
+    @Published var preferRuleSets = false
     private var preferRuleSetsWasExplicitlySet = false
-    var exportContentModes: [ClientTarget: ExportContentMode] = [:]
+    @Published var exportContentModes: [ClientTarget: ExportContentMode] = [:]
     /// Schemes the user imported by URL. The bundled ACL4SSR ones live in the
     /// app bundle and are added by `ruleSchemes`.
-    var importedSchemes: [RuleScheme] = []
+    @Published var importedSchemes: [RuleScheme] = []
     /// A missing scheme id means "follow the source exactly". Once the user
     /// changes a checkbox we keep the explicit set separately from the
     /// downloaded scheme, so refreshing that scheme cannot undo the choice.
-    var selectedRuleGroups: [String: Set<String>] = [:]
+    @Published var selectedRuleGroups: [String: Set<String>] = [:]
     /// Missing means follow the source and show its emoji. Only explicit
     /// overrides are persisted so newly imported schemes retain their design.
-    var ruleGroupEmojisEnabled: [String: Bool] = [:]
-    var excludedNodeIDs: Set<UUID> = []
+    @Published var ruleGroupEmojisEnabled: [String: Bool] = [:]
+    @Published var excludedNodeIDs: Set<UUID> = []
     /// User-authored flows are also stored outside imported schemes. This is
     /// what lets a Tailscale rule survive every upstream ruleset refresh.
-    var customRuleFlows: [CustomRuleFlow] = []
-    var importingSchemeIDs: Set<String> = []
-    var isImportingScheme = false
+    @Published var customRuleFlows: [CustomRuleFlow] = []
+    @Published var importingSchemeIDs: Set<String> = []
+    @Published var isImportingScheme = false
     /// Protocols the user chose not to write, per client. A client may support
     /// a protocol while the user's licence does not — Surge needs a paid tier
     /// for AnyTLS — and Tower cannot detect that, so it is a manual choice.
-    var excludedKinds: [ClientTarget: Set<ProxyKind>] = [:]
+    @Published var excludedKinds: [ClientTarget: Set<ProxyKind>] = [:]
 
     private let persistence: PersistenceStore
     private let cloudSync: CloudSyncStore
     /// Off until the user turns it on. Enabling it is the moment subscription
     /// URLs and node passwords first leave the device, so it is never a
     /// default and never silently re-enabled.
-    private(set) var iCloudSyncEnabled = CloudSyncPreference.isEnabled()
-    private(set) var isCloudSyncing = false
-    private(set) var lastCloudSyncAt: Date?
-    @ObservationIgnored private var cloudUploadTask: Task<Void, Never>?
-    @ObservationIgnored private var lastLocalEditAt: Date?
+    @Published private(set) var iCloudSyncEnabled = CloudSyncPreference.isEnabled()
+    @Published private(set) var isCloudSyncing = false
+    @Published private(set) var lastCloudSyncAt: Date?
+    private var cloudUploadTask: Task<Void, Never>?
+    private var lastLocalEditAt: Date?
     private let subscriptionService: any SubscriptionFetching
     private let ruleRepository: RuleRepository
     private let schemeRepository: RuleSchemeRepository
@@ -87,9 +86,9 @@ final class AppModel {
     /// Latency probes and DNS lookups both run in small batches so expanding a
     /// large subscription cannot flood the network stack or stall the main actor.
     private static let resolutionBatchSize = 8
-    @ObservationIgnored private var generationCache = ConfigurationCache()
-    @ObservationIgnored private var countryResolutionInFlightNodeIDs: Set<UUID> = []
-    @ObservationIgnored private var lanSubscriptionServer: LANSubscriptionServer?
+    private var generationCache = ConfigurationCache()
+    private var countryResolutionInFlightNodeIDs: Set<UUID> = []
+    private var lanSubscriptionServer: LANSubscriptionServer?
 
     init(
         persistence: PersistenceStore = PersistenceStore(),
@@ -1413,7 +1412,7 @@ final class AppModel {
         guard iCloudSyncEnabled else { return }
         cloudUploadTask?.cancel()
         cloudUploadTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled, let self else { return }
             do {
                 try await self.cloudSync.upload(snapshot)

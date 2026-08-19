@@ -2,14 +2,14 @@ import SwiftUI
 
 @main
 struct TowerApp: App {
-    @State private var model = AppModel()
+    @StateObject private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
-                .environment(model)
+                .environmentObject(model)
                 // The real use is "added a subscription on the other phone,
                 // now picked this one up", which is exactly a return to the
                 // foreground. Uploads were already automatic; without this the
@@ -20,7 +20,7 @@ struct TowerApp: App {
                     await model.synchronizeWithCloud()
                     await model.refreshOnOpenIfEnabled()
                 }
-                .onChange(of: scenePhase) { _, phase in
+                .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
                     guard hasSeenWelcome else { return }
                     Task {
@@ -33,7 +33,7 @@ struct TowerApp: App {
 }
 
 struct AppRootView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Whether the privacy introduction has been shown. Stored rather than
     /// derived so a user who already trusts the app never sees it twice, and
@@ -58,29 +58,29 @@ struct AppRootView: View {
     }
 
     private var mainInterface: some View {
-        @Bindable var model = model
-
-        return TabView(selection: $model.selectedTab) {
-            NavigationStack {
+        TabView(selection: Binding(
+            get: { model.selectedTab },
+            set: { model.selectedTab = $0 }
+        )) {
+            TowerNavigation {
                 SubscriptionsView()
             }
             .tabItem { Label(AppTab.subscriptions.title, systemImage: AppTab.subscriptions.symbol) }
             .tag(AppTab.subscriptions)
 
-            NavigationStack {
+            TowerNavigation {
                 RulesView()
             }
             .tabItem { Label(AppTab.rules.title, systemImage: AppTab.rules.symbol) }
             .tag(AppTab.rules)
 
-            NavigationStack {
+            TowerNavigation {
                 ExportView()
             }
             .tabItem { Label(AppTab.export.title, systemImage: AppTab.export.symbol) }
             .tag(AppTab.export)
         }
         .tint(.accentColor)
-        .sensoryFeedback(.selection, trigger: model.selectedTab)
         .towerToast()
     }
 }
@@ -96,7 +96,7 @@ extension View {
 }
 
 private struct ToastOverlay: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -109,7 +109,7 @@ private struct ToastOverlay: View {
                         : .move(edge: .top).combined(with: .opacity)
                 )
                 .task(id: toast.id) {
-                    try? await Task.sleep(for: .seconds(2.6))
+                    try? await Task.sleep(nanoseconds: 2_600_000_000)
                     withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 1)) {
                         model.dismissToast(id: toast.id)
                     }

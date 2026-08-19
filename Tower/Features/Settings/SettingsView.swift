@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Binding var configurationNameDraft: ConfigurationNameDraft
     @State private var selectedClient: ClientTarget?
     @State private var isConfirmingTokenRotation = false
@@ -47,7 +47,7 @@ struct SettingsView: View {
 /// named for that moment — "打开塔台时" — rather than promising the
 /// subscription stays current on its own.
 private struct AutoRefreshSection: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
 
     private var binding: Binding<Bool> {
         Binding(get: { model.autoRefreshOnOpen }, set: model.setAutoRefreshOnOpen)
@@ -74,7 +74,7 @@ private struct AutoRefreshSection: View {
 /// happens rather than "sync your settings" — the user is agreeing to put
 /// subscription URLs and node passwords in their iCloud account.
 private struct CloudSyncCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @State private var isConfirming = false
 
     private var binding: Binding<Bool> {
@@ -227,7 +227,7 @@ struct SecurityAndSourceView: View {
 
 private struct NodeAndExportSettingsCard: View {
     @Binding var configurationNameDraft: ConfigurationNameDraft
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
 
     private var appendNameBinding: Binding<Bool> {
         Binding(
@@ -420,7 +420,7 @@ struct SettingsRowLabel: View {
 /// with my subscriptions", which is the question that card is already about.
 /// As separate cards they read as three unrelated topics stacked up.
 private struct RenewalReminderSection: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
 
@@ -497,8 +497,7 @@ private struct RenewalReminderSection: View {
             }
         }
         .accessibilityIdentifier("renewal-reminder-card")
-        .sensoryFeedback(.selection, trigger: isExpanded)
-        .onChange(of: model.renewalRemindersEnabled) { _, isEnabled in
+        .onChange(of: model.renewalRemindersEnabled) { isEnabled in
             if !isEnabled { isExpanded = false }
         }
     }
@@ -564,7 +563,7 @@ private struct RenewalReminderDetailRow: View {
 }
 
 private struct LANSharingCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Binding var selectedClient: ClientTarget?
     @Binding var isConfirmingTokenRotation: Bool
 
@@ -714,7 +713,7 @@ private struct LANSharingCard: View {
 }
 
 private struct URLPanel: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let url: URL
 
@@ -725,6 +724,7 @@ private struct URLPanel: View {
     @State private var qrRenderedURL: URL?
     @State private var qrFailed = false
     @State private var didCopy = false
+    @State private var isShareSheetPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -755,12 +755,10 @@ private struct URLPanel: View {
                         isShowingQRCode.toggle()
                     }
                 }
-                ShareLink(item: url) {
-                    actionLabel("分享", symbol: "square.and.arrow.up", isOn: false)
+                action("分享", symbol: "square.and.arrow.up", isOn: false) {
+                    isShareSheetPresented = true
                 }
-                .buttonStyle(ResponsivePressButtonStyle())
             }
-            .sensoryFeedback(.success, trigger: didCopy)
 
             if isShowingQRCode {
                 qrCode
@@ -775,6 +773,9 @@ private struct URLPanel: View {
         // decided the outcome, and when the task won it saw the previous
         // image, skipped rendering, and was then cleared — leaving the panel
         // permanently blank after switching client format.
+        .sheet(isPresented: $isShareSheetPresented) {
+            ActivitySheet(items: [url])
+        }
         .task(id: qrTaskID) {
             guard isShowingQRCode, qrRenderedURL != url else { return }
             // A code for the previous address is worse than no code: it looks

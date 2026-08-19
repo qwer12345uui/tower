@@ -124,7 +124,7 @@ final class DirectImportService {
 
         expirationTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .seconds(45))
+                try await Task.sleep(nanoseconds: 45_000_000_000)
             } catch {
                 return
             }

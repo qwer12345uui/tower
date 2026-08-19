@@ -314,7 +314,7 @@ private struct AnimatedWorldDotMarker: View {
         .task(id: entry.id) {
             if !reduceMotion {
                 let delay = min(Double(index) * 0.025, 0.2)
-                try? await Task.sleep(for: .seconds(delay))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
             guard !Task.isCancelled else { return }
             withAnimation(

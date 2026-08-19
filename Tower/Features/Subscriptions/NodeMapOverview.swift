@@ -2,7 +2,7 @@ import CoreLocation
 import SwiftUI
 
 struct NodeMapOverview: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let nodes: [ProxyNode]
 
@@ -22,11 +22,10 @@ struct NodeMapOverview: View {
                 .id(SubscriptionScrollTarget.nodes)
                 .accessibilityIdentifier("nodes-section")
         }
-        .sensoryFeedback(.selection, trigger: selectedRegionCode)
         .task(id: ipCountryTaskID) {
             await model.resolveIPCountries(for: nodes)
         }
-        .onChange(of: clusters.map(\.id)) { _, clusterIDs in
+        .onChange(of: clusters.map(\.id)) { clusterIDs in
             // A collapsed list stays collapsed; only a selection that no longer
             // exists is cleared.
             guard let selectedRegionCode, !clusterIDs.contains(selectedRegionCode) else { return }
@@ -131,7 +130,7 @@ struct NodeMapOverview: View {
             }
             .id(cluster.id)
         } else if clusters.isEmpty && !nodes.isEmpty {
-            ContentUnavailableView(
+            TowerUnavailableContentView(
                 "还不能定位节点",
                 systemImage: "mappin.slash",
                 description: Text("正在根据节点 IP 判断国家和地区；无法解析时会参考节点名称。")
@@ -171,7 +170,7 @@ struct NodeMapOverview: View {
 }
 
 private struct SelectedRegionNodes: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let cluster: NodeRegionCluster
     let onCollapse: () -> Void
 
@@ -220,7 +219,7 @@ private struct SelectedRegionNodes: View {
 }
 
 struct ExpandableNodeRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
@@ -345,7 +344,6 @@ struct ExpandableNodeRow: View {
             usesInsetBackground ? Color.primary.opacity(0.045) : Color.clear,
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
-        .sensoryFeedback(.selection, trigger: isExpanded)
         .sheet(item: $sharePayload) { payload in
             SharePayloadSheet(payload: payload)
         }
@@ -365,7 +363,7 @@ private struct NodeDisplayNameLabel: View {
 }
 
 private struct NodeRegionLogo: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
 
@@ -485,7 +483,7 @@ private struct CountryFlagEmoji: View {
 }
 
 private struct NodeLatencyBadge: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model
     let node: ProxyNode
 
     var body: some View {
