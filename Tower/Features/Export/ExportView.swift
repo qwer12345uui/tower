@@ -34,8 +34,9 @@ struct ExportView: View {
             .padding(.bottom, 18)
         }
         .glassTabBarScrollBehavior()
-        .background(TowerTheme.background.ignoresSafeArea())
+        .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
         .navigationTitle("生成与导出")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -571,8 +572,8 @@ private struct ImportActionBar: View {
         }
         .padding(.horizontal, TowerTheme.pagePadding)
         .padding(.top, 11)
-        .padding(.bottom, 9)
-        .background(.bar)
+        .padding(.bottom, 12)
+        .background(.regularMaterial)
         .overlay(alignment: .top) {
             Divider().opacity(0.45)
         }

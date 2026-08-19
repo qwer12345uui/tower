@@ -52,8 +52,9 @@ struct SubscriptionsView: View {
                 .padding(.bottom, 34)
             }
             .glassTabBarScrollBehavior()
-            .background(TowerTheme.background.ignoresSafeArea())
+            .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
             .navigationTitle("我的订阅")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
