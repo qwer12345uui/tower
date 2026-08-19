@@ -33,7 +33,7 @@ struct TowerApp: App {
 }
 
 struct AppRootView: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Whether the privacy introduction has been shown. Stored rather than
     /// derived so a user who already trusts the app never sees it twice, and
@@ -96,7 +96,7 @@ extension View {
 }
 
 private struct ToastOverlay: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {

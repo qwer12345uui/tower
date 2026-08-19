@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SubscriptionsView: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAddSourcePresented = false
     @State private var pendingDeletion: PendingDeletion?
@@ -173,7 +173,7 @@ struct SubscriptionsView: View {
 }
 
 private struct SubscriptionRefreshReportOverlay: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let report: SubscriptionRefreshReport
@@ -311,7 +311,7 @@ private enum PendingDeletion {
 }
 
 private struct EditSubscriptionSheet: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let source: SubscriptionSource
     @Binding var nameDraft: SubscriptionNameDraft
@@ -399,7 +399,7 @@ private struct EditSubscriptionSheet: View {
 }
 
 private struct SubscriptionOverviewCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let onMetricTap: (SubscriptionOverviewMetric) -> Void
 
     var body: some View {
@@ -498,7 +498,7 @@ private struct SubscriptionEmptyState: View {
 }
 
 private struct SubscriptionCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let source: SubscriptionSource
     let onRefresh: () -> Void
@@ -655,7 +655,7 @@ private struct SubscriptionCard: View {
 }
 
 private struct LocalNodeCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let onEdit: () -> Void
     let onMoveUp: () -> Void

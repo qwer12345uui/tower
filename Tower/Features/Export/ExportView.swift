@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ExportView: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @State private var sharePayload: ExportPayload?
     @State private var directImportService = DirectImportService()
     @State private var isImporting = false
@@ -134,7 +134,7 @@ struct ExportView: View {
 }
 
 private struct ExportContentModePicker: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         if model.selectedTarget.supportsNodesOnlyImport {
@@ -178,7 +178,7 @@ private struct ExportContentModePicker: View {
 
 private struct ExportSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var configurationNameDraft: ConfigurationNameDraft
 
     var body: some View {
@@ -208,7 +208,7 @@ private struct ConfigurationPreviewPayload: Identifiable {
 }
 
 private struct ClientPicker: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -312,7 +312,7 @@ enum ProtocolFilterPolicy {
 /// needs a paid tier for AnyTLS — and Tower cannot detect that, so the choice
 /// is offered per client and only for protocols the nodes actually contain.
 private struct ProtocolFilter: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         let kinds = model.filterableKinds(for: model.selectedTarget)
@@ -360,7 +360,7 @@ private struct ProtocolFilter: View {
 }
 
 private struct ConversionSummary: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let configuration: GeneratedConfiguration
 
     var body: some View {
@@ -439,7 +439,7 @@ private struct ConfigurationPreview: View {
 }
 
 private struct ConfigurationPreviewSheet: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let configuration: GeneratedConfiguration
     @State private var isContentReady = false

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var configurationNameDraft: ConfigurationNameDraft
     @State private var selectedClient: ClientTarget?
     @State private var isConfirmingTokenRotation = false
@@ -47,7 +47,7 @@ struct SettingsView: View {
 /// named for that moment — "打开塔台时" — rather than promising the
 /// subscription stays current on its own.
 private struct AutoRefreshSection: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     private var binding: Binding<Bool> {
         Binding(get: { model.autoRefreshOnOpen }, set: model.setAutoRefreshOnOpen)
@@ -74,7 +74,7 @@ private struct AutoRefreshSection: View {
 /// happens rather than "sync your settings" — the user is agreeing to put
 /// subscription URLs and node passwords in their iCloud account.
 private struct CloudSyncCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @State private var isConfirming = false
 
     private var binding: Binding<Bool> {
@@ -227,7 +227,7 @@ struct SecurityAndSourceView: View {
 
 private struct NodeAndExportSettingsCard: View {
     @Binding var configurationNameDraft: ConfigurationNameDraft
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     private var appendNameBinding: Binding<Bool> {
         Binding(
@@ -420,7 +420,7 @@ struct SettingsRowLabel: View {
 /// with my subscriptions", which is the question that card is already about.
 /// As separate cards they read as three unrelated topics stacked up.
 private struct RenewalReminderSection: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
 
@@ -563,7 +563,7 @@ private struct RenewalReminderDetailRow: View {
 }
 
 private struct LANSharingCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var selectedClient: ClientTarget?
     @Binding var isConfirmingTokenRotation: Bool
 
@@ -713,7 +713,7 @@ private struct LANSharingCard: View {
 }
 
 private struct URLPanel: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let url: URL
 

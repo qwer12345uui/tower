@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RulesView: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @State private var isImportPresented = false
     @State private var pendingDeletion: RuleScheme?
     @State private var pendingFlowDeletion: CustomRuleFlow?
@@ -259,7 +259,7 @@ struct RulesView: View {
 }
 
 private struct RulesOverviewCard: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -386,7 +386,7 @@ private struct CustomRuleEditorRequest: Identifiable {
 }
 
 private struct CustomRuleFlowRow: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let flow: CustomRuleFlow
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -634,7 +634,7 @@ private struct RuleSchemeCard: View {
 }
 
 private struct ImportRuleSchemeSheet: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var urlString = ""
     @State private var name = ""
@@ -706,7 +706,7 @@ private struct ImportRuleSchemeSheet: View {
 }
 
 private struct RuleGroupSelectionSheet: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var searchText = ""
@@ -786,7 +786,7 @@ private struct CustomRuleFlowEditor: View {
         case rules
     }
 
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let existingFlow: CustomRuleFlow?

@@ -2,7 +2,7 @@ import CoreLocation
 import SwiftUI
 
 struct NodeMapOverview: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let nodes: [ProxyNode]
 
@@ -170,7 +170,7 @@ struct NodeMapOverview: View {
 }
 
 private struct SelectedRegionNodes: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let cluster: NodeRegionCluster
     let onCollapse: () -> Void
 
@@ -219,7 +219,7 @@ private struct SelectedRegionNodes: View {
 }
 
 struct ExpandableNodeRow: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
@@ -363,7 +363,7 @@ private struct NodeDisplayNameLabel: View {
 }
 
 private struct NodeRegionLogo: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
 
@@ -483,7 +483,7 @@ private struct CountryFlagEmoji: View {
 }
 
 private struct NodeLatencyBadge: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
 
     var body: some View {

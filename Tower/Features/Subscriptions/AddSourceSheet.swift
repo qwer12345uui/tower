@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct AddSourceSheet: View {
-    @EnvironmentObject private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     private let editingNode: ProxyNode?
     @State private var name = ""
