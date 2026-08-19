@@ -1,6 +1,14 @@
 name: Build iOS IPA
 
 on:
+  push:
+    branches:
+      - main
+      - ios15-github-ipa
+    paths:
+      - 'Tower/**'
+      - 'Tower.xcodeproj/**'
+      - '.github/workflows/build-ipa.yml'
   workflow_dispatch:
     inputs:
       output_type:
@@ -15,11 +23,11 @@ on:
 permissions:
   contents: read
 
-# This workflow deliberately has no push/pull_request/release trigger and does
-# not call GitHub Releases, App Store Connect, TestFlight, or any upload API.
+# This workflow can build automatically after an eligible push, but it never
+# creates a GitHub Release or calls App Store Connect, TestFlight, or any upload API.
 jobs:
   build:
-    name: Build ${{ inputs.output_type }} IPA
+    name: Build IPA
     runs-on: macos-15
     timeout-minutes: 45
 
@@ -28,6 +36,9 @@ jobs:
       PROJECT: Tower.xcodeproj
       ARCHIVE_PATH: ${{ github.workspace }}/build/Tower.xcarchive
       EXPORT_PATH: ${{ github.workspace }}/build/export
+      # Pushes use unsigned builds by default. Set repository variable
+      # AUTO_SIGN_ON_PUSH=true only after the four signing secrets are configured.
+      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.output_type || vars.AUTO_SIGN_ON_PUSH == 'true' && 'development-signed' || 'unsigned' }}
 
     steps:
       - name: Check out source
@@ -39,7 +50,7 @@ jobs:
           xcodebuild -showsdks
 
       - name: Build app without signing
-        if: inputs.output_type == 'unsigned'
+        if: env.BUILD_MODE == 'unsigned'
         run: |
           set -o pipefail
           xcodebuild \
@@ -55,7 +66,7 @@ jobs:
             build
 
       - name: Package unsigned IPA for inspection
-        if: inputs.output_type == 'unsigned'
+        if: env.BUILD_MODE == 'unsigned'
         run: |
           set -euo pipefail
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/Tower.app"
@@ -66,7 +77,7 @@ jobs:
           rm -rf build/Payload
 
       - name: Validate development-signing secrets
-        if: inputs.output_type == 'development-signed'
+        if: env.BUILD_MODE == 'development-signed'
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -79,7 +90,7 @@ jobs:
           done
 
       - name: Install development signing assets
-        if: inputs.output_type == 'development-signed'
+        if: env.BUILD_MODE == 'development-signed'
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -108,7 +119,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/profile.plist" > "$RUNNER_TEMP/profile_name.txt"
 
       - name: Archive and export development-signed IPA
-        if: inputs.output_type == 'development-signed'
+        if: env.BUILD_MODE == 'development-signed'
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
@@ -154,7 +165,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Tower-${{ inputs.output_type }}-iOS15-${{ github.run_number }}
+          name: Tower-${{ env.BUILD_MODE }}-iOS15-${{ github.run_number }}
           path: build/*.ipa
           if-no-files-found: error
           retention-days: 14

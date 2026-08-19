@@ -91,7 +91,7 @@ App 内置简体中文、繁体中文、英语、日语、韩语、西班牙语�
 
 ## GitHub 在线构建 IPA
 
-项目提供仅可手动启动的 **Build iOS IPA** 工作流，用于在 GitHub 的 macOS 运行器上构建设备版 IPA。工作流不监听推送、不创建 Release，也不会上传 TestFlight 或 App Store Connect。构建完成后，在该次 Actions 运行页的 **Artifacts** 区域下载 IPA 构件；具体下载步骤、开发签名所需 secrets 与 iOS 15 降级边界见 [GitHub 在线构建与下载 IPA](docs/GITHUB_IPA_BUILD.md)。
+项目提供 **Build iOS IPA** 自动化工作流，在 `main` 或 `ios15-github-ipa` 分支推送 iOS 源码、Xcode 工程或工作流修改后自动运行，用 GitHub 的 macOS 运行器构建设备版 IPA。工作流不创建 Release，也不会上传 TestFlight 或 App Store Connect。构建完成后，在该次 Actions 运行页的 **Artifacts** 区域下载 IPA 构件；具体下载步骤、自动开发签名所需 secrets 与 iOS 15 降级边界见 [GitHub 在线构建与下载 IPA](docs/GITHUB_IPA_BUILD.md)。
 
 ## 已知边界
 

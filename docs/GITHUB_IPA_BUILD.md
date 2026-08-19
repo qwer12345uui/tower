@@ -1,10 +1,10 @@
 # GitHub 在线构建与下载 IPA
 
-本仓库的 [Build iOS IPA](../.github/workflows/build-ipa.yml) 工作流**只允许手动启动**。它不监听代码推送，不创建 GitHub Release，不上传 App Store Connect 或 TestFlight，也不会将 IPA 自动发布到任何第三方位置。
+本仓库的 [Build iOS IPA](../.github/workflows/build-ipa.yml) 工作流会在 `main` 或 `ios15-github-ipa` 分支的 iOS 源码、Xcode 工程或工作流文件发生推送时**自动启动**。它不创建 GitHub Release，不上传 App Store Connect 或 TestFlight，也不会将 IPA 自动发布到任何第三方位置。
 
 ## 下载位置
 
-在 GitHub 仓库中打开 **Actions**，选择左侧的 **Build iOS IPA**，点击 **Run workflow**。构建成功后，进入该次运行页面底部的 **Artifacts** 区域，下载名称形如 `Tower-unsigned-iOS15-运行号` 或 `Tower-development-signed-iOS15-运行号` 的构件。构件保留 14 天，过期后会自动删除。
+在 GitHub 仓库中打开 **Actions**，选择左侧的 **Build iOS IPA**，进入最近一次成功运行。构建成功后，在运行页底部的 **Artifacts** 区域下载名称形如 `Tower-unsigned-iOS15-运行号` 或 `Tower-development-signed-iOS15-运行号` 的构件。构件保留 14 天，过期后会自动删除。工作流也保留 **Run workflow** 手动入口，便于不改代码时重新构建。
 
 | 选项 | 产物 | 是否可直接安装 | 用途 |
 | --- | --- | --- | --- |
@@ -31,10 +31,10 @@ base64 -i AppleDevelopment.p12 | pbcopy
 base64 -i TowerDevelopment.mobileprovision | pbcopy
 ```
 
-准备完成后，在手动运行工作流时选择 `development-signed`。工作流会在临时钥匙串中导入签名材料，导出完成后仅上传 IPA 构件；不会创建发布页或对外分发链接。
+准备完成后，可采用下列任一方式生成开发签名 IPA。手动运行工作流时选择 `development-signed`；若希望**每次推送都自动生成可安装 IPA**，请在仓库 **Settings → Secrets and variables → Actions → Variables** 新建变量 `AUTO_SIGN_ON_PUSH`，值设为 `true`。未设置该变量时，自动构建默认只生成未签名的编译验证 IPA。工作流会在临时钥匙串中导入签名材料，导出完成后仅上传 IPA 构件；不会创建发布页或对外分发链接。
 
 ## iOS 15 兼容性边界
 
 工程最低部署目标已调整为 **iOS 15.0**。为保持稳定性，iOS 16 及以上的实时相机二维码扫描、横向拖拽排序、滚动吸附和新式数值转场在 iOS 15 上会降级为可访问的替代交互：二维码扫描提示用户改用粘贴输入，客户端排序仍可通过已保留的“向前移动 / 向后移动”辅助功能操作。iOS 16 及以上仍保留实时相机扫码。
 
-每次改动 Swift 源码后，应先运行 `unsigned` 以验证无签名设备构建；准备在真机测试时再运行 `development-signed`。如果签名构建失败，请优先核对描述文件的 Bundle ID、Team ID、证书类型和设备 UDID，而不是修改工作流来绕过签名校验。
+每次改动 Swift 源码后，工作流会自动运行。默认模式会生成 `unsigned` 以验证无签名设备构建；配置 `AUTO_SIGN_ON_PUSH=true` 后，会自动运行 `development-signed`。如果签名构建失败，请优先核对描述文件的 Bundle ID、Team ID、证书类型和设备 UDID，而不是修改工作流来绕过签名校验。
