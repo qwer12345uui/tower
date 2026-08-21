@@ -15,7 +15,28 @@ struct TowerApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = navigationBar
         UINavigationBar.appearance().compactAppearance = navigationBar
 
+        let tabBar = UITabBarAppearance()
+        tabBar.configureWithTransparentBackground()
+        tabBar.backgroundEffect = UIBlurEffect(style: .systemChromeMaterialDark)
+        tabBar.backgroundColor = UIColor(red: 0.025, green: 0.070, blue: 0.125, alpha: 0.58)
+        tabBar.shadowColor = UIColor.white.withAlphaComponent(0.15)
+
+        let selectedColor = UIColor.systemBlue
+        let normalColor = UIColor(white: 0.72, alpha: 1)
+        let normalAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: normalColor]
+        let selectedAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: selectedColor]
+
+        for layout in [tabBar.stackedLayoutAppearance, tabBar.inlineLayoutAppearance, tabBar.compactInlineLayoutAppearance] {
+            layout.normal.iconColor = normalColor
+            layout.normal.titleTextAttributes = normalAttributes
+            layout.selected.iconColor = selectedColor
+            layout.selected.titleTextAttributes = selectedAttributes
+        }
+
         let systemTabBar = UITabBar.appearance()
+        systemTabBar.standardAppearance = tabBar
+        systemTabBar.scrollEdgeAppearance = tabBar
+        systemTabBar.isTranslucent = true
         systemTabBar.itemPositioning = .fill
         systemTabBar.itemWidth = 0
         systemTabBar.itemSpacing = 0
@@ -79,7 +100,8 @@ struct AppRootView: View {
             get: { model.selectedTab },
             set: { tab in
                 guard model.selectedTab != tab else { return }
-                withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.20)) {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.28, dampingFraction: 0.90)) {
                     model.selectedTab = tab
                 }
             }
