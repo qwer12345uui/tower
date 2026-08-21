@@ -49,7 +49,7 @@ struct SubscriptionsView: View {
                 }
                 .padding(.horizontal, TowerTheme.pagePadding)
                 .padding(.top, 20)
-                .padding(.bottom, 34)
+                .padding(.bottom, 52)
             }
             .background(TowerTheme.background.ignoresSafeArea(edges: .bottom))
             .navigationTitle("我的订阅")
@@ -57,7 +57,7 @@ struct SubscriptionsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        withAnimation(reduceMotion ? .easeOut(duration: 0.20) : .spring(response: 0.42, dampingFraction: 0.88)) {
+                        withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .easeOut(duration: 0.32)) {
                             proxy.scrollTo(SubscriptionScrollTarget.top, anchor: .top)
                         }
                     } label: {

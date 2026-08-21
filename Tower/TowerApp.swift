@@ -14,6 +14,31 @@ struct TowerApp: App {
         UINavigationBar.appearance().standardAppearance = navigationBar
         UINavigationBar.appearance().scrollEdgeAppearance = navigationBar
         UINavigationBar.appearance().compactAppearance = navigationBar
+
+        let tabBar = UITabBarAppearance()
+        tabBar.configureWithOpaqueBackground()
+        tabBar.backgroundColor = UIColor(red: 0.015, green: 0.090, blue: 0.165, alpha: 1)
+        tabBar.shadowColor = UIColor.black.withAlphaComponent(0.58)
+
+        let selectedColor = UIColor.systemBlue
+        let normalColor = UIColor(white: 0.72, alpha: 1)
+        let normalAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: normalColor]
+        let selectedAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: selectedColor]
+
+        for layout in [tabBar.stackedLayoutAppearance, tabBar.inlineLayoutAppearance, tabBar.compactInlineLayoutAppearance] {
+            layout.normal.iconColor = normalColor
+            layout.normal.titleTextAttributes = normalAttributes
+            layout.selected.iconColor = selectedColor
+            layout.selected.titleTextAttributes = selectedAttributes
+        }
+
+        let systemTabBar = UITabBar.appearance()
+        systemTabBar.standardAppearance = tabBar
+        systemTabBar.scrollEdgeAppearance = tabBar
+        systemTabBar.isTranslucent = false
+        systemTabBar.itemPositioning = .fill
+        systemTabBar.itemWidth = 0
+        systemTabBar.itemSpacing = 0
     }
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
