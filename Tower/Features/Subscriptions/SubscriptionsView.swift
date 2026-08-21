@@ -94,7 +94,7 @@ struct SubscriptionsView: View {
                 // with a gap above it. Returning to the anchor is what the
                 // gesture implies anyway: you pulled from the top to see the
                 // top.
-                withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 1)) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .easeInOut(duration: 0.28)) {
                     proxy.scrollTo(SubscriptionScrollTarget.top, anchor: .top)
                 }
             }
