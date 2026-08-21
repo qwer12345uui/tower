@@ -15,31 +15,6 @@ struct TowerApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = navigationBar
         UINavigationBar.appearance().compactAppearance = navigationBar
 
-        let tabBar = UITabBarAppearance()
-        tabBar.configureWithTransparentBackground()
-        tabBar.backgroundEffect = UIBlurEffect(style: .systemChromeMaterialDark)
-        tabBar.backgroundColor = UIColor(red: 0.025, green: 0.070, blue: 0.125, alpha: 0.58)
-        tabBar.shadowColor = UIColor.white.withAlphaComponent(0.15)
-
-        let selectedColor = UIColor.systemBlue
-        let normalColor = UIColor(white: 0.72, alpha: 1)
-        let normalAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: normalColor]
-        let selectedAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: selectedColor]
-
-        for layout in [tabBar.stackedLayoutAppearance, tabBar.inlineLayoutAppearance, tabBar.compactInlineLayoutAppearance] {
-            layout.normal.iconColor = normalColor
-            layout.normal.titleTextAttributes = normalAttributes
-            layout.selected.iconColor = selectedColor
-            layout.selected.titleTextAttributes = selectedAttributes
-        }
-
-        let systemTabBar = UITabBar.appearance()
-        systemTabBar.standardAppearance = tabBar
-        systemTabBar.scrollEdgeAppearance = tabBar
-        systemTabBar.isTranslucent = true
-        systemTabBar.itemPositioning = .fill
-        systemTabBar.itemWidth = 0
-        systemTabBar.itemSpacing = 0
     }
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
@@ -95,8 +70,8 @@ struct AppRootView: View {
             }
     }
 
-    private var mainInterface: some View {
-        TabView(selection: Binding(
+    private var tabSelection: Binding<AppTab> {
+        Binding(
             get: { model.selectedTab },
             set: { tab in
                 guard model.selectedTab != tab else { return }
@@ -105,32 +80,38 @@ struct AppRootView: View {
                     model.selectedTab = tab
                 }
             }
-        )) {
+        )
+    }
+
+    private var mainInterface: some View {
+        TabView(selection: tabSelection) {
             TowerNavigation {
                 SubscriptionsView()
-            }
-            .tabItem {
-                Label(AppTab.subscriptions.title, systemImage: AppTab.subscriptions.symbol)
             }
             .tag(AppTab.subscriptions)
 
             TowerNavigation {
                 RulesView()
             }
-            .tabItem {
-                Label(AppTab.rules.title, systemImage: AppTab.rules.symbol)
-            }
             .tag(AppTab.rules)
 
             TowerNavigation {
                 ExportView()
             }
-            .tabItem {
-                Label(AppTab.export.title, systemImage: AppTab.export.symbol)
-            }
             .tag(AppTab.export)
         }
-        .tint(.accentColor)
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: 82)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .bottom) {
+            AdaptiveGlassTabBar(selection: tabSelection)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .zIndex(1)
+        }
         .towerToast()
     }
 }
