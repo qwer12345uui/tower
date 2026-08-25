@@ -59,7 +59,9 @@ final class MotionDesignTests: XCTestCase {
         let modifierSource = String(source[modifierStart.lowerBound..<extensionStart.lowerBound])
 
         XCTAssertTrue(
-            modifierSource.contains(".geometryGroup()"),
+            !modifierSource.contains(".geometryGroup()")
+                && modifierSource.contains(".overlay")
+                && modifierSource.contains(".shadow"),
             "卡片受祖先展开收起影响时，背景与内部文字必须作为同一几何单元移动"
         )
     }

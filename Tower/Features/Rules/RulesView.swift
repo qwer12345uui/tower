@@ -178,11 +178,13 @@ private struct RulesOverviewCard: View {
                     Text(title)
                         .font(.title2.weight(.bold))
                         .lineLimit(1)
+                        .frame(minHeight: 28, alignment: .topLeading)
                         .minimumScaleFactor(0.8)
                     Text(summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                        .frame(minHeight: 34, alignment: .topLeading)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: symbol)

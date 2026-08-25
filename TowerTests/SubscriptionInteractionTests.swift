@@ -774,7 +774,7 @@ final class SubscriptionInteractionTests: XCTestCase {
             .appendingPathComponent("Tower/Features/Subscriptions/SubscriptionsView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("navigationDestination(item: $nodeFilterRoute)"))
+        XCTAssertTrue(source.contains(".sheet(item: $nodeFilterRoute)"))
         XCTAssertTrue(source.contains("NodeFilterView(initialFocus: route)"))
         XCTAssertTrue(source.contains("case .nodes:"))
         XCTAssertTrue(source.contains("case .regions:"))
