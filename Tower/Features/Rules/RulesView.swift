@@ -48,7 +48,6 @@ struct RulesView: View {
                 .accessibilityIdentifier("import-rule-scheme")
             }
         }
-        .sensoryFeedback(.selection, trigger: model.selectedPresetID)
         .sheet(isPresented: $isImportPresented) {
             ImportRuleSchemeSheet()
         }
@@ -483,7 +482,6 @@ private struct RuleSchemeCard: View {
                 .stroke(isSelected ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1.5)
                 .animation(TowerMotion.selection(reduceMotion: reduceMotion), value: isSelected)
         }
-        .sensoryFeedback(.selection, trigger: isExpanded)
     }
 
     private func description(of group: RuleSchemeGroup) -> String {
@@ -590,7 +588,6 @@ private struct ImportRuleSchemeSheet: View {
             }
             .navigationTitle("导入规则")
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -766,7 +763,6 @@ private struct RuleCustomizationSheet: View {
                 // which is the whole promise of the screen.
                 prompt: "在线搜索规则：如 YouTube OpenAI"
             )
-            .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("rule-customization-list")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -878,7 +874,7 @@ private struct RuleCustomizationSheet: View {
         .onAppear {
             synchronizeGroupDraft(with: model.customizableRuleGroups(for: scheme))
         }
-        .onChange(of: model.customizableRuleGroups(for: scheme)) { _, groups in
+        .onChange(of: model.customizableRuleGroups(for: scheme)) { groups in
             guard !ruleEditMode.isEditing else { return }
             synchronizeGroupDraft(with: groups)
         }
@@ -896,7 +892,7 @@ private struct RuleCustomizationSheet: View {
     private func toggleRuleGroupEmojiVisibilityAfterMenuDismiss() {
         let enabled = !model.ruleGroupEmojisAreEnabled(for: scheme)
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(nanoseconds: 180_000_000)
             guard !Task.isCancelled else { return }
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
@@ -987,7 +983,7 @@ private struct RuleCustomizationSheet: View {
         }
 
         if visibleCatalogEntries.isEmpty {
-            ContentUnavailableView.search(text: trimmedSearch)
+            LegacyUnavailableView.search(text: trimmedSearch)
                 .listRowBackground(Color.clear)
         } else {
             Section {
@@ -1978,7 +1974,6 @@ private struct LocalRuleSetEditor: View {
                 ? String(localized: "新建规则集")
                 : String(localized: "编辑规则集"))
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(false)
             .accessibilityIdentifier("custom-rule-flow-editor")
             .toolbar {

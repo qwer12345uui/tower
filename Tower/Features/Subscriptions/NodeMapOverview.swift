@@ -46,7 +46,6 @@ struct NodeMapOverview: View {
             .id(SubscriptionScrollTarget.nodes)
             .accessibilityIdentifier("nodes-section")
         }
-        .sensoryFeedback(.selection, trigger: selectedRegionCode)
         .task(id: ipCountryTaskID) {
             await model.resolveIPCountries(for: nodes)
         }
@@ -62,7 +61,7 @@ struct NodeMapOverview: View {
                 countryCodes: countryCodes
             )
         }
-        .onChange(of: clusters.map(\.id)) { _, clusterIDs in
+        .onChange(of: clusters.map(\.id)) { clusterIDs in
             // A collapsed list stays collapsed; only a selection that no longer
             // exists is cleared.
             guard let selectedRegionCode, !clusterIDs.contains(selectedRegionCode) else { return }
@@ -171,10 +170,10 @@ struct NodeMapOverview: View {
             }
             .id(cluster.id)
         } else if clusters.isEmpty && !nodes.isEmpty {
-            ContentUnavailableView(
+            LegacyUnavailableView(
                 "还不能定位节点",
                 systemImage: "mappin.slash",
-                description: Text("正在根据节点 IP 判断国家和地区；无法解析时会参考节点名称。")
+                detail: "正在根据节点 IP 判断国家和地区；无法解析时会参考节点名称。"
             )
             .frame(minHeight: 130)
         }
@@ -443,7 +442,6 @@ struct ExpandableNodeRow: View {
             usesInsetBackground ? Color.primary.opacity(0.045) : Color.clear,
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
-        .sensoryFeedback(.selection, trigger: isExpanded)
         .sheet(item: $sharePayload) { payload in
             SharePayloadSheet(payload: payload)
         }

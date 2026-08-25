@@ -30,7 +30,7 @@ enum PersistencePolicy {
     /// Collapse a burst of edits into one write, shortly after they stop. Used
     /// by the app, where the tap has to stay responsive. `flushPendingWrite()`
     /// closes the window when Tower leaves the foreground.
-    case coalesced(Duration)
+    case coalesced(TimeInterval)
 }
 
 @MainActor
@@ -1106,7 +1106,7 @@ final class AppModel: ObservableObject {
         countryResolutionDrainTask = Task { [weak self] in
             // Long enough to collect the rows of one scroll, short enough that
             // a single tapped-open row still answers immediately.
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(nanoseconds: 50_000_000)
             guard let self else { return }
             let queued = Array(self.pendingCountryResolutionNodes.values)
             self.pendingCountryResolutionNodes.removeAll()
@@ -2234,7 +2234,7 @@ final class AppModel: ObservableObject {
         guard iCloudSyncEnabled else { return }
         cloudUploadTask?.cancel()
         cloudUploadTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled, let self else { return }
             do {
                 try await self.cloudSync.upload(snapshot)
@@ -2443,7 +2443,7 @@ final class AppModel: ObservableObject {
             pendingPersistenceUpdatedAt = updatedAt
             persistTask?.cancel()
             persistTask = Task { [weak self] in
-                try? await Task.sleep(for: delay)
+                try? await Task.sleep(nanoseconds: UInt64(max(delay, 0) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 self?.flushPendingWrite()
             }

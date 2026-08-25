@@ -97,7 +97,6 @@ struct AddSourceSheet: View {
             }
             .navigationTitle(editingNode == nil ? String(localized: "添加订阅或节点") : String(localized: "编辑"))
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
@@ -247,7 +246,7 @@ struct AddSourceSheet: View {
                     .tag(kind)
                 }
             }
-            .onChange(of: manualDraft.kind) { _, selectedKind in
+            .onChange(of: manualDraft.kind) { selectedKind in
                 manualDraft.applyDefaults(for: selectedKind)
             }
         }

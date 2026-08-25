@@ -6,7 +6,7 @@ struct TowerApp: App {
     // Coalesced rather than immediate: a burst of edits — ticking through the
     // node filter, reordering policy groups — becomes one write shortly after
     // the user stops, instead of a full snapshot encode inside every tap.
-    @StateObject private var model = AppModel(persistencePolicy: .coalesced(.milliseconds(250)))
+    @StateObject private var model = AppModel(persistencePolicy: .coalesced(0.25))
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 

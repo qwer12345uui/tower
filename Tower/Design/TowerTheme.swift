@@ -243,7 +243,6 @@ struct ToastView: View {
         }
         .shadow(color: accentColor.opacity(toast.tone == .success ? 0.2 : 0.1), radius: 14, y: 7)
         .accessibilityElement(children: .combine)
-        .sensoryFeedback(toast.tone == .success ? .success : .selection, trigger: toast.id)
         .padding(.horizontal)
     }
 
@@ -307,6 +306,5 @@ struct CheckmarkToggleStyle: ToggleStyle {
         .accessibilityAddTraits(.isToggle)
         // Every other choice in the app taps back — the tab bar, the rule
         // list, the client picker. This one was the exception.
-        .sensoryFeedback(.selection, trigger: configuration.isOn)
     }
 }

@@ -8,17 +8,17 @@ struct QRCodeScannerSheet: View {
     var body: some View {
         NavigationView {
             Group {
-                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                if #available(iOS 16.0, *),
+                   DataScannerViewController.isSupported,
+                   DataScannerViewController.isAvailable {
                     QRCodeScannerView { value in
                         onScan(value)
                         dismiss()
                     }
                     .ignoresSafeArea(edges: .bottom)
                 } else {
-                    ContentUnavailableView(
-                        "无法使用相机扫码",
-                        systemImage: "camera.fill",
-                        description: Text("请检查相机权限，或返回后粘贴二维码中的链接。")
+                    ScannerUnavailableView(
+                        detail: "当前系统不支持相机扫码，请返回后粘贴二维码中的链接。"
                     )
                 }
             }
@@ -38,13 +38,13 @@ struct QRCodeScannerPreview: View {
 
     var body: some View {
         Group {
-            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+            if #available(iOS 16.0, *),
+               DataScannerViewController.isSupported,
+               DataScannerViewController.isAvailable {
                 QRCodeScannerView(onScan: onScan)
             } else {
-                ContentUnavailableView(
-                    "无法使用相机扫码",
-                    systemImage: "camera.fill",
-                    description: Text("请检查相机权限，或切换到粘贴识别。")
+                ScannerUnavailableView(
+                    detail: "iOS 15 请使用粘贴链接方式添加订阅或节点。"
                 )
             }
         }
@@ -54,6 +54,27 @@ struct QRCodeScannerPreview: View {
     }
 }
 
+private struct ScannerUnavailableView: View {
+    let detail: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 32, weight: .semibold))
+            Text("无法使用相机扫码")
+                .font(.headline)
+            Text(detail)
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 24)
+        }
+        .foregroundColor(.primary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+@available(iOS 16.0, *)
 private struct QRCodeScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 

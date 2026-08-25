@@ -587,8 +587,7 @@ private struct RenewalReminderSection: View {
             }
         }
         .accessibilityIdentifier("renewal-reminder-card")
-        .sensoryFeedback(.selection, trigger: isExpanded)
-        .onChange(of: model.renewalRemindersEnabled) { _, isEnabled in
+        .onChange(of: model.renewalRemindersEnabled) { isEnabled in
             if !isEnabled { isExpanded = false }
         }
     }
@@ -887,6 +886,7 @@ private struct URLPanel: View {
     @State private var qrRenderedURL: URL?
     @State private var qrFailed = false
     @State private var didCopy = false
+    @State private var isActivityPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -917,18 +917,19 @@ private struct URLPanel: View {
                         isShowingQRCode.toggle()
                     }
                 }
-                ShareLink(item: url) {
-                    actionLabel("分享", symbol: "square.and.arrow.up", isOn: false)
+                action("分享", symbol: "square.and.arrow.up", isOn: false) {
+                    isActivityPresented = true
                 }
-                .buttonStyle(ResponsivePressButtonStyle())
             }
-            .sensoryFeedback(.success, trigger: didCopy)
 
             if isShowingQRCode {
                 qrCode
                     .frame(maxWidth: .infinity)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
             }
+        }
+        .sheet(isPresented: $isActivityPresented) {
+            ActivitySheet(items: [url])
         }
         .padding(13)
         .background(Color.accentColor.opacity(0.075), in: RoundedRectangle(cornerRadius: 15, style: .continuous))

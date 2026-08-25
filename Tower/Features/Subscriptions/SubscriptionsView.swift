@@ -645,7 +645,6 @@ private struct SubscriptionCard: View {
         }
         .padding(14)
         .towerCard()
-        .sensoryFeedback(.selection, trigger: isExpanded)
         .sheet(item: $sharePayload) { payload in
             SharePayloadSheet(payload: payload)
         }

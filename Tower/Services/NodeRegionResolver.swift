@@ -510,8 +510,8 @@ enum NodeRegionResolver {
             Locale(identifier: "zh_Hant")
         ]
 
-        return Locale.Region.isoRegions.compactMap { region in
-            let code = region.identifier.uppercased()
+        return Locale.isoRegionCodes.compactMap { regionCode in
+            let code = regionCode.uppercased()
             guard code.count == 2,
                   code.unicodeScalars.allSatisfy({ (65...90).contains($0.value) }) else {
                 return nil

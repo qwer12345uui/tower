@@ -87,14 +87,13 @@ struct ExportView: View {
         // down — and a name typed but never committed is simply lost. Catching
         // the flag covers every path; committing twice is harmless because the
         // draft is the same either way.
-        .onChange(of: isSettingsPresented) { _, isPresented in
+        .onChange(of: isSettingsPresented) { isPresented in
             guard !isPresented else { return }
             model.setConfigurationName(configurationNameDraft.committedName)
         }
         .fullScreenCover(item: $previewPayload) { payload in
             ConfigurationPreviewSheet(configuration: payload.configuration)
         }
-        .sensoryFeedback(.selection, trigger: selectedDestinationID)
         // Deliberately no .onDisappear teardown. Handing the link to another
         // app backgrounds Tower, and SwiftUI may call onDisappear when it does
         // — which killed the server before the client had fetched. Hiddify
@@ -286,11 +285,9 @@ private struct ClientPicker: View {
                         lanSharingButton
                     }
                 }
-                .scrollTargetLayout()
                 .padding(.vertical, 4)
             }
             .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
     }
 
