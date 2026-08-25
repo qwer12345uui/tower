@@ -177,12 +177,12 @@ private struct RulesOverviewCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.title2.weight(.bold))
-                        .lineLimit(1, reservesSpace: true)
+                        .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: symbol)
@@ -518,8 +518,7 @@ private struct ImportedRuleSchemeEditor: View {
             Form {
                 Section {
                     TextField("名称", text: $name)
-                    TextField("简介", text: $summary, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("简介", text: $summary)
                 } footer: {
                     Text("只修改显示信息，不会更改规则内容或来源链接。")
                 }
@@ -560,8 +559,7 @@ private struct ImportRuleSchemeSheet: View {
         NavigationView {
             Form {
                 Section {
-                    TextField("https://…", text: $urlString, axis: .vertical)
-                        .lineLimit(2...6)
+                    TextField("https://…", text: $urlString)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -601,7 +599,7 @@ private struct ImportRuleSchemeSheet: View {
                 }
             }
             .onAppear { isURLFocused = true }
-            .onChange(of: urlString) { errorMessage = nil }
+            .onChange(of: urlString) { _ in errorMessage = nil }
         }
     }
 
@@ -771,7 +769,6 @@ private struct RuleCustomizationSheet: View {
                         } label: {
                             Label("显示策略组 Emoji", systemImage: "face.smiling")
                         }
-                        .menuActionDismissBehavior(.enabled)
                         Button {
                             showsSaveScheme = true
                         } label: {
@@ -1950,8 +1947,7 @@ private struct LocalRuleSetEditor: View {
 
                         TextEditor(text: $rulesText)
                             .font(.system(.footnote, design: .monospaced))
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 230)
+                                            .frame(minHeight: 230)
                             .focused($focusedField, equals: .rules)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()

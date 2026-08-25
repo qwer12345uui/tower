@@ -82,7 +82,7 @@ struct WelcomeView: View {
                 Text("您的节点不会被泄露")
                     // Large text reads too loose at default tracking, so it is
                     // tightened here and left alone in the body copy below.
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
                     .tracking(-0.6)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
