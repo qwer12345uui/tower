@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SubscriptionsView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAddSourcePresented = false
     @State private var pendingDeletion: PendingDeletion?
@@ -164,7 +164,7 @@ struct SubscriptionsView: View {
 }
 
 private struct SubscriptionRefreshReportOverlay: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let report: SubscriptionRefreshReport
@@ -302,7 +302,7 @@ private enum PendingDeletion {
 }
 
 private struct EditSubscriptionSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let source: SubscriptionSource
     @Binding var nameDraft: SubscriptionNameDraft
@@ -323,7 +323,7 @@ private struct EditSubscriptionSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("订阅") {
                     TextField("名称（可选）", text: $nameDraft.text)
@@ -396,7 +396,7 @@ private struct EditSubscriptionSheet: View {
 }
 
 private struct SubscriptionOverviewCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let onMetricTap: (SubscriptionOverviewMetric) -> Void
 
     var body: some View {
@@ -523,7 +523,7 @@ struct SubscriptionCardMetrics: Equatable {
 }
 
 private struct SubscriptionCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let source: SubscriptionSource
     let onRefresh: () -> Void
@@ -834,7 +834,7 @@ private struct SubscriptionFactsRow: View {
 }
 
 private struct LocalNodeCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let onEdit: () -> Void
     let onMoveUp: () -> Void

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ExportView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var sharePayload: ExportPayload?
     @State private var directImportService = DirectImportService()
     @State private var isImporting = false
@@ -161,7 +161,7 @@ struct ExportView: View {
 }
 
 private struct ExportContentModePicker: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         if model.selectedTarget.supportedContentModes.count > 1 {
@@ -203,12 +203,12 @@ private struct ExportContentModePicker: View {
 
 private struct ExportSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var configurationNameDraft: ConfigurationNameDraft
     let openLANSharing: () -> Void
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             SettingsView(
                 configurationNameDraft: $configurationNameDraft,
                 openLANSharing: openLANSharing
@@ -237,7 +237,7 @@ private struct ConfigurationPreviewPayload: Identifiable {
 }
 
 private struct ClientPicker: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var isLANSharingSelected: Bool
     let activateLANSharing: () -> Void
 
@@ -438,7 +438,7 @@ enum ProtocolFilterPolicy {
 /// needs a paid tier for AnyTLS — and Tower cannot detect that, so the choice
 /// is offered per client and only for protocols the nodes actually contain.
 private struct ProtocolFilter: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         let kinds = model.filterableKinds(for: model.selectedTarget)
@@ -499,7 +499,7 @@ private struct ProtocolSymbolBadge: View {
 }
 
 private struct ConversionSummary: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let configuration: GeneratedConfiguration
 
     var body: some View {
@@ -576,13 +576,13 @@ private struct ConfigurationPreview: View {
 }
 
 private struct ConfigurationPreviewSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let configuration: GeneratedConfiguration
     @State private var highlightedSpans: [ConfigurationSyntaxHighlighter.Span]?
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Group {
                 if let highlightedSpans {
                     ConfigurationTextView(

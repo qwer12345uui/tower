@@ -13,7 +13,7 @@ struct SharePayloadSheet: View {
     @State private var qrGenerationFailed = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {

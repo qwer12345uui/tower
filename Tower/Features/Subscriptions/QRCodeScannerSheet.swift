@@ -6,7 +6,7 @@ struct QRCodeScannerSheet: View {
     let onScan: (String) -> Void
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Group {
                 if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
                     QRCodeScannerView { value in

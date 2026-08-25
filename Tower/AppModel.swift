@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Combine
 
 enum RuleGroupRenameError: LocalizedError {
     case emptyName
@@ -34,87 +34,86 @@ enum PersistencePolicy {
 }
 
 @MainActor
-@Observable
-final class AppModel {
+final class AppModel: ObservableObject {
     static let defaultRuleSchemeID = "acl4ssr-default"
 
     // Defaults so `apply(_:)` can be an instance method: a class cannot call
     // one until every stored property is initialised.
-    var subscriptions: [SubscriptionSource] = []
-    var nodes: [ProxyNode] = []
-    var selectedPresetID: String = AppModel.defaultRuleSchemeID
-    var selectedTarget: ClientTarget = .surge
-    var selectedTab: AppTab = .subscriptions
-    var refreshingSourceIDs: Set<UUID> = []
-    var nodeLatencies: [UUID: NodeLatencyMeasurement] = [:]
-    var latencyTestingNodeIDs: Set<UUID> = []
-    var selectedLatencyTestMode: NodeLatencyTestMode = .automatic
-    var nodeIPCountryCodes: [UUID: String] = [:]
-    var countryResolutionCompletedNodeIDs: Set<UUID> = []
-    var toast: ToastMessage?
-    var subscriptionRefreshReport: SubscriptionRefreshReport?
+    @Published var subscriptions: [SubscriptionSource] = []
+    @Published var nodes: [ProxyNode] = []
+    @Published var selectedPresetID: String = AppModel.defaultRuleSchemeID
+    @Published var selectedTarget: ClientTarget = .surge
+    @Published var selectedTab: AppTab = .subscriptions
+    @Published var refreshingSourceIDs: Set<UUID> = []
+    @Published var nodeLatencies: [UUID: NodeLatencyMeasurement] = [:]
+    @Published var latencyTestingNodeIDs: Set<UUID> = []
+    @Published var selectedLatencyTestMode: NodeLatencyTestMode = .automatic
+    @Published var nodeIPCountryCodes: [UUID: String] = [:]
+    @Published var countryResolutionCompletedNodeIDs: Set<UUID> = []
+    @Published var toast: ToastMessage?
+    @Published var subscriptionRefreshReport: SubscriptionRefreshReport?
     /// The running full refresh, so a second pull joins it rather than
     /// starting a rival queue. Not observed by any view.
-    @ObservationIgnored private var refreshAllTask: Task<Void, Never>?
+    private var refreshAllTask: Task<Void, Never>?
     /// The persistent service credential is deliberately unrelated to every
     /// airport URL. Only this random token appears in LAN sharing links.
-    var lanSharingToken = LANSubscriptionAccessTokenStore.loadOrCreate()
-    var lanSharingURL: URL?
-    var isLANSharingStarting = false
-    var renewalRemindersEnabled = false
-    var isUpdatingRenewalReminders = false
-    var clientOrder = ClientTarget.allCases
-    var appendSubscriptionNameToNodes = false
-    var filterSubscriptionInfoNodes = false
+    @Published var lanSharingToken = LANSubscriptionAccessTokenStore.loadOrCreate()
+    @Published var lanSharingURL: URL?
+    @Published var isLANSharingStarting = false
+    @Published var renewalRemindersEnabled = false
+    @Published var isUpdatingRenewalReminders = false
+    @Published var clientOrder = ClientTarget.allCases
+    @Published var appendSubscriptionNameToNodes = false
+    @Published var filterSubscriptionInfoNodes = false
     /// Refresh enabled subscriptions when the app opens. Off by default like
     /// every other feature here that reaches the network — the promise the app
     /// makes on first launch is that it goes online when you say so.
-    var autoRefreshOnOpen = false
-    @ObservationIgnored private var lastAutoRefreshAt: Date?
-    var configurationName = TowerBrand.localizedName
-    var preferRuleSets = false
+    @Published var autoRefreshOnOpen = false
+    private var lastAutoRefreshAt: Date?
+    @Published var configurationName = TowerBrand.localizedName
+    @Published var preferRuleSets = false
     private var preferRuleSetsWasExplicitlySet = false
-    var exportContentModes: [ClientTarget: ExportContentMode] = [:]
+    @Published var exportContentModes: [ClientTarget: ExportContentMode] = [:]
     /// Schemes the user imported by URL. The bundled ACL4SSR ones live in the
     /// app bundle and are added by `ruleSchemes`.
-    var importedSchemes: [RuleScheme] = []
+    @Published var importedSchemes: [RuleScheme] = []
     /// A missing scheme id means "follow the source exactly". Once the user
     /// changes a checkbox we keep the explicit set separately from the
     /// downloaded scheme, so refreshing that scheme cannot undo the choice.
-    var selectedRuleGroups: [String: Set<String>] = [:]
+    @Published var selectedRuleGroups: [String: Set<String>] = [:]
     /// Per-scheme group order, selection mode and candidate policies. This is
     /// deliberately separate from imported rules so an upstream refresh never
     /// destroys local customization.
-    var ruleSchemeCustomizations: [String: RuleSchemeCustomization] = [:]
+    @Published var ruleSchemeCustomizations: [String: RuleSchemeCustomization] = [:]
     /// Missing means follow the source and show its emoji. Only explicit
     /// overrides are persisted so newly imported schemes retain their design.
-    var ruleGroupEmojisEnabled: [String: Bool] = [:]
-    var excludedNodeIDs: Set<UUID> = []
+    @Published var ruleGroupEmojisEnabled: [String: Bool] = [:]
+    @Published var excludedNodeIDs: Set<UUID> = []
     /// User-owned rule contents are kept independently from the schemes in
     /// which they are currently active.
-    var localRuleSets: [LocalRuleSet] = []
+    @Published var localRuleSets: [LocalRuleSet] = []
     /// Per-scheme placement, routing and enablement for local and catalog rules.
-    var customRuleFlows: [CustomRuleFlow] = []
-    var importingSchemeIDs: Set<String> = []
-    var isImportingScheme = false
+    @Published var customRuleFlows: [CustomRuleFlow] = []
+    @Published var importingSchemeIDs: Set<String> = []
+    @Published var isImportingScheme = false
     /// Protocols the user chose not to write, per client. A client may support
     /// a protocol while the user's licence does not — Surge needs a paid tier
     /// for AnyTLS — and Tower cannot detect that, so it is a manual choice.
-    var excludedKinds: [ClientTarget: Set<ProxyKind>] = [:]
+    @Published var excludedKinds: [ClientTarget: Set<ProxyKind>] = [:]
 
     private let persistence: PersistenceStore
     private let cloudSync: CloudSyncStore
     /// Off until the user turns it on. Enabling it is the moment subscription
     /// URLs and node passwords first leave the device, so it is never a
     /// default and never silently re-enabled.
-    private(set) var iCloudSyncEnabled = CloudSyncPreference.isEnabled()
-    private(set) var isCloudSyncing = false
-    private(set) var lastCloudSyncAt: Date?
-    @ObservationIgnored private var cloudUploadTask: Task<Void, Never>?
+    @Published private(set) var iCloudSyncEnabled = CloudSyncPreference.isEnabled()
+    @Published private(set) var isCloudSyncing = false
+    @Published private(set) var lastCloudSyncAt: Date?
+    private var cloudUploadTask: Task<Void, Never>?
     /// When the state now in memory was last edited. Readable so a test can
     /// confirm a launch restores it: dropping it is what let an older iCloud
     /// snapshot win and overwrite a local edit.
-    @ObservationIgnored private(set) var lastLocalEditAt: Date?
+    private(set) var lastLocalEditAt: Date?
     private let subscriptionService: any SubscriptionFetching
     private let ruleRepository: RuleRepository
     private let schemeRepository: RuleSchemeRepository
@@ -129,34 +128,34 @@ final class AppModel {
     /// large subscription cannot flood the network stack or stall the main actor.
     private static let resolutionBatchSize = 8
     private static let resolvedHostCountryCodeTTL: TimeInterval = 24 * 60 * 60
-    @ObservationIgnored private var generationCache = ConfigurationCache()
+    private var generationCache = ConfigurationCache()
     /// The rules page shows every scheme's total at once. Re-materializing all
     /// schemes and re-reading imported lists whenever only the selected id
     /// changes makes a simple mode switch block the main actor.
-    @ObservationIgnored private var schemeRuleCountCache: [String: Int] = [:]
-    @ObservationIgnored private var customizableSchemeCache: [String: RuleScheme] = [:]
-    @ObservationIgnored private var materializedSchemeCache: [String: RuleScheme] = [:]
+    private var schemeRuleCountCache: [String: Int] = [:]
+    private var customizableSchemeCache: [String: RuleScheme] = [:]
+    private var materializedSchemeCache: [String: RuleScheme] = [:]
     /// Test-visible instrumentation proving that selection-only renders reuse
     /// the already materialized rule presentation.
-    @ObservationIgnored private(set) var ruleSchemeMaterializationCount = 0
-    @ObservationIgnored private var countryResolutionInFlightNodeIDs: Set<UUID> = []
+    private(set) var ruleSchemeMaterializationCount = 0
+    private var countryResolutionInFlightNodeIDs: Set<UUID> = []
     /// Rows that have asked for their country and are waiting to be resolved as
     /// one batch rather than one request each.
-    @ObservationIgnored private var pendingCountryResolutionNodes: [UUID: ProxyNode] = [:]
-    @ObservationIgnored private var countryResolutionDrainTask: Task<Void, Never>?
+    private var pendingCountryResolutionNodes: [UUID: ProxyNode] = [:]
+    private var countryResolutionDrainTask: Task<Void, Never>?
     /// Country codes already resolved, keyed by host so they survive the node
     /// ids being regenerated on every refresh. Persisted, so a cold launch does
     /// not repeat a DNS lookup for every node the offline database already
     /// answered for. Not observed: it only ever feeds `nodeIPCountryCodes`.
-    @ObservationIgnored private var resolvedHostCountryCodes: [String: String] = [:]
-    @ObservationIgnored private var resolvedHostCountryCodeUpdatedAt: [String: Date] = [:]
-    @ObservationIgnored private var lanSubscriptionServer: LANSubscriptionServer?
-    @ObservationIgnored private let persistencePolicy: PersistencePolicy
-    @ObservationIgnored private var pendingPersistenceUpdatedAt: Date?
-    @ObservationIgnored private var persistTask: Task<Void, Never>?
+    private var resolvedHostCountryCodes: [String: String] = [:]
+    private var resolvedHostCountryCodeUpdatedAt: [String: Date] = [:]
+    private var lanSubscriptionServer: LANSubscriptionServer?
+    private let persistencePolicy: PersistencePolicy
+    private var pendingPersistenceUpdatedAt: Date?
+    private var persistTask: Task<Void, Never>?
     /// Test-visible instrumentation for the interaction contract: coalesced
     /// edits return before Tower walks the complete state into a snapshot.
-    @ObservationIgnored private(set) var persistenceSnapshotBuildCount = 0
+    private(set) var persistenceSnapshotBuildCount = 0
 
     init(
         persistence: PersistenceStore = PersistenceStore(),

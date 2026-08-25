@@ -28,7 +28,7 @@ struct NodeFilterCriteria: Equatable {
 }
 
 struct NodeFilterView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let initialFocus: NodeFilterRoute
 

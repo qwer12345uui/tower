@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RulesView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var isImportPresented = false
     @State private var pendingDeletion: RuleScheme?
     @State private var editingImportedScheme: RuleScheme?
@@ -170,7 +170,7 @@ struct RulesView: View {
 }
 
 private struct RulesOverviewCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -503,7 +503,7 @@ private struct RuleSchemeCard: View {
 }
 
 private struct ImportedRuleSchemeEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var name: String
@@ -516,7 +516,7 @@ private struct ImportedRuleSchemeEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("名称", text: $name)
@@ -551,7 +551,7 @@ private struct ImportedRuleSchemeEditor: View {
 }
 
 private struct ImportRuleSchemeSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var urlString = ""
     @State private var name = ""
@@ -560,7 +560,7 @@ private struct ImportRuleSchemeSheet: View {
     @FocusState private var isURLFocused: Bool
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("https://…", text: $urlString, axis: .vertical)
@@ -696,7 +696,7 @@ private enum RuleCustomizationDeletion {
 /// hand-written rules. Search is the primary path; raw syntax stays one level
 /// deeper for people who actually need it.
 private struct RuleCustomizationSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var ruleEditMode: EditMode = .inactive
@@ -749,7 +749,7 @@ private struct RuleCustomizationSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 customRuleGroupsSection
                 localRuleSetsSection
@@ -1379,7 +1379,7 @@ private struct RuleCustomizationSheet: View {
 }
 
 private struct RuleGroupIdentityEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let group: RuleSchemeGroup
@@ -1409,7 +1409,7 @@ private struct RuleGroupIdentityEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     HStack(spacing: 12) {
@@ -1464,7 +1464,7 @@ private struct RuleGroupIdentityEditor: View {
 }
 
 private struct RuleGroupEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let group: RuleSchemeGroup
@@ -1512,7 +1512,7 @@ private struct RuleGroupEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 switch editorMode {
                 case .routingTargets:
@@ -1682,7 +1682,7 @@ private struct OrderedPolicyCandidateSections: View {
 }
 
 private struct SaveCustomizedSchemeSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let onSaved: () -> Void
@@ -1695,7 +1695,7 @@ private struct SaveCustomizedSchemeSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("方案名称", text: $name)
@@ -1775,7 +1775,7 @@ enum RulePolicyPresentation {
 }
 
 private struct CatalogRuleRouteEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let flow: CustomRuleFlow
@@ -1812,7 +1812,7 @@ private struct CatalogRuleRouteEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 OrderedPolicyCandidateSections(
                     selected: $selectedReferences,
@@ -1883,7 +1883,7 @@ private struct LocalRuleSetEditor: View {
         case rules
     }
 
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let existingRuleSet: LocalRuleSet?
     @State private var name: String
@@ -1925,7 +1925,7 @@ private struct LocalRuleSetEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("规则集") {
                     TextField("名称，例如 🎬 奈飞", text: $name)

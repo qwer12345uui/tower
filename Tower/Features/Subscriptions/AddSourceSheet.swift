@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct AddSourceSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     private let editingNode: ProxyNode?
     @State private var name = ""
@@ -65,7 +65,7 @@ struct AddSourceSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 if editingNode == nil {
                     sourceModePicker

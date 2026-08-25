@@ -15,7 +15,7 @@ struct NodeMapPresentation {
 }
 
 struct NodeMapOverview: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let nodes: [ProxyNode]
 
@@ -203,7 +203,7 @@ struct NodeMapOverview: View {
 }
 
 private struct SelectedRegionNodes: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let cluster: NodeRegionCluster
     let onCollapse: () -> Void
 
@@ -257,7 +257,7 @@ private struct SelectedRegionNodes: View {
 }
 
 struct CompactNodeRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
     @State private var sharePayload: SharePayload?
@@ -313,7 +313,7 @@ struct CompactNodeRow: View {
 }
 
 struct ExpandableNodeRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
@@ -460,7 +460,7 @@ private struct NodeDisplayNameLabel: View {
 }
 
 private struct NodeRegionLogo: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let resolvesRegionOnAppear: Bool
     let diameter: CGFloat
@@ -586,7 +586,7 @@ private struct CountryFlagEmoji: View {
 }
 
 private struct NodeLatencyBadge: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let node: ProxyNode
     let showsUntestedState: Bool
 
