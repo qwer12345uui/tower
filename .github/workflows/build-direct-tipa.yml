@@ -1,0 +1,80 @@
+name: Build Direct TIPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-tipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-tipa:
+    name: Build unsigned TIPA
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Report Xcode version
+        run: xcodebuild -version
+
+      - name: Read release version
+        id: version
+        run: |
+          set -euo pipefail
+          BUILD_SETTINGS="$(xcodebuild -showBuildSettings -project Tower.xcodeproj -scheme Tower -configuration Release)"
+          MARKETING_VERSION="$(awk -F ' = ' '/ MARKETING_VERSION = / { print $2; exit }' <<< "$BUILD_SETTINGS")"
+          BUILD_NUMBER="$(awk -F ' = ' '/ CURRENT_PROJECT_VERSION = / { print $2; exit }' <<< "$BUILD_SETTINGS")"
+          test -n "$MARKETING_VERSION"
+          test -n "$BUILD_NUMBER"
+          echo "marketing_version=$MARKETING_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Build Release app without signing
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Tower.xcodeproj \
+            -scheme Tower \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=''
+
+      - name: Package TIPA payload
+        id: package
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/Tower.app"
+          test -d "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/Tower"
+
+          OUTPUT_DIR="$RUNNER_TEMP/tipa-package"
+          mkdir -p "$OUTPUT_DIR/Payload"
+          cp -R "$APP_PATH" "$OUTPUT_DIR/Payload/Tower.app"
+
+          FILE_NAME="Tower-${{ steps.version.outputs.marketing_version }}-${{ steps.version.outputs.build_number }}.tipa"
+          mkdir -p build
+          ditto -c -k --sequesterRsrc --keepParent "$OUTPUT_DIR/Payload" "build/$FILE_NAME"
+          unzip -l "build/$FILE_NAME" | grep -q 'Payload/Tower.app/Info.plist'
+          shasum -a 256 "build/$FILE_NAME" | tee build/SHA256SUMS.txt
+          echo "file_name=$FILE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload direct TIPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tower-${{ steps.version.outputs.marketing_version }}-${{ steps.version.outputs.build_number }}-tipa
+          path: |
+            build/*.tipa
+            build/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
