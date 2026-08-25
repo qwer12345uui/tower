@@ -39,7 +39,16 @@ struct NodeFilterView: View {
     @State private var localOnly = false
 
     var body: some View {
-        List {
+        // Filtering used to run once for the rows, once for the empty check,
+        // once for the header count, once for the select-all state and once for
+        // its disabled state — five passes over every node, each resolving a
+        // display name and running four case-insensitive searches, on every
+        // keystroke in the search field.
+        let filteredNodes = self.filteredNodes
+        let allFilteredNodesIncluded = !filteredNodes.isEmpty
+            && filteredNodes.allSatisfy(model.isNodeIncluded)
+
+        return List {
             Section {
                 LazyVGrid(columns: filterColumns, spacing: 9) {
                     countryFilter
@@ -68,7 +77,10 @@ struct NodeFilterView: View {
                 HStack(spacing: 12) {
                     Text("节点 · \(filteredNodes.count)")
                     Spacer()
-                    bulkSelectionButton
+                    bulkSelectionButton(
+                        filteredNodes: filteredNodes,
+                        allIncluded: allFilteredNodesIncluded
+                    )
                 }
                 .textCase(nil)
             }
@@ -106,22 +118,21 @@ struct NodeFilterView: View {
         }
     }
 
-    private var allFilteredNodesIncluded: Bool {
-        !filteredNodes.isEmpty && filteredNodes.allSatisfy(model.isNodeIncluded)
-    }
-
     private var filterColumns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
         return Array(repeating: GridItem(.flexible(), spacing: 9), count: count)
     }
 
-    private var bulkSelectionButton: some View {
+    private func bulkSelectionButton(
+        filteredNodes: [ProxyNode],
+        allIncluded: Bool
+    ) -> some View {
         Button {
-            model.setNodes(filteredNodes, included: !allFilteredNodesIncluded)
+            model.setNodes(filteredNodes, included: !allIncluded)
         } label: {
             Label(
-                allFilteredNodesIncluded ? String(localized: "全不选") : String(localized: "全选"),
-                systemImage: allFilteredNodesIncluded ? "xmark.circle.fill" : "checkmark.circle.fill"
+                allIncluded ? String(localized: "全不选") : String(localized: "全选"),
+                systemImage: allIncluded ? "xmark.circle.fill" : "checkmark.circle.fill"
             )
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 14)
@@ -174,10 +185,20 @@ struct NodeFilterView: View {
         Menu {
             Button("全部协议") { kind = nil }
             ForEach(protocolOptions, id: \.self) { option in
-                Button(option.title) { kind = option }
+                Button { kind = option } label: {
+                    Label {
+                        Text(option.title)
+                    } icon: {
+                        ProtocolMenuIcon(kind: option)
+                    }
+                }
             }
         } label: {
-            FilterChip(title: kind?.title ?? String(localized: "协议"), symbol: "network", isActive: kind != nil)
+            FilterChip(
+                title: kind?.title ?? String(localized: "协议"),
+                kind: kind,
+                isActive: kind != nil
+            )
         }
         .frame(maxWidth: .infinity)
     }
@@ -217,8 +238,7 @@ struct NodeFilterView: View {
             model.setNode(node, included: !included)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: node.kind.symbol)
-                    .font(.headline)
+                ProtocolGlyph(kind: node.kind, size: 18)
                     .foregroundStyle(included ? Color.accentColor : Color.secondary)
                     .frame(width: 38, height: 38)
                     .background(Color.accentColor.opacity(included ? 0.1 : 0.04), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -249,10 +269,32 @@ struct NodeFilterView: View {
 private struct FilterChip: View {
     let title: String
     let symbol: String
+    let kind: ProxyKind?
     let isActive: Bool
 
+    init(title: String, symbol: String, isActive: Bool) {
+        self.title = title
+        self.symbol = symbol
+        self.kind = nil
+        self.isActive = isActive
+    }
+
+    init(title: String, kind: ProxyKind?, isActive: Bool) {
+        self.title = title
+        self.symbol = "network"
+        self.kind = kind
+        self.isActive = isActive
+    }
+
     var body: some View {
-        Label(title, systemImage: symbol)
+        HStack(spacing: 7) {
+            if let kind {
+                ProtocolGlyph(kind: kind)
+            } else {
+                Image(systemName: symbol)
+            }
+            Text(title)
+        }
             .font(.subheadline.weight(.semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.8)

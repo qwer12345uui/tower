@@ -12,14 +12,41 @@ final class DirectImportServiceTests: XCTestCase {
 
         XCTAssertEqual(surge.scheme, "surge")
         XCTAssertTrue(surge.absoluteString.hasPrefix("surge:///install-config?url="))
-        XCTAssertTrue(clash.absoluteString.hasPrefix("clash://install-config?url="))
-        let clashComponents = try XCTUnwrap(URLComponents(url: clash, resolvingAgainstBaseURL: false))
-        XCTAssertEqual(
-            clashComponents.queryItems?.first(where: { $0.name == "name" })?.value,
-            TowerBrand.localizedName
-        )
+        XCTAssertTrue(clash.absoluteString.hasPrefix("stash://install-config?url="))
         XCTAssertTrue(shadowrocket.absoluteString.hasPrefix("shadowrocket://config/add/http://127.0.0.1"))
         XCTAssertTrue(loon.absoluteString.hasPrefix("loon://import?sub=http%3A%2F%2F127.0.0.1"))
+    }
+
+    func testClashAppUsesClashMetaInstallConfigSchemeWithOnlyTheSubscriptionURL() throws {
+        let target = try XCTUnwrap(ClientTarget(rawValue: "clash-apple"))
+
+        let url = try ClientImportURLBuilder.make(
+            target: target,
+            configurationURL: localURL,
+            displayName: "塔台"
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "clashmeta://install-config?url=http%3A%2F%2F127.0.0.1%3A7788%2Fprivate%2Ftower.conf"
+        )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.queryItems, [URLQueryItem(name: "url", value: localURL.absoluteString)])
+    }
+
+    func testStashUsesInstallConfigSchemeWithOnlyTheSubscriptionURL() throws {
+        let url = try ClientImportURLBuilder.make(
+            target: .clash,
+            configurationURL: localURL,
+            displayName: "塔台"
+        )
+
+        XCTAssertEqual(
+            url.absoluteString,
+            "stash://install-config?url=http%3A%2F%2F127.0.0.1%3A7788%2Fprivate%2Ftower.conf"
+        )
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.queryItems, [URLQueryItem(name: "url", value: localURL.absoluteString)])
     }
 
     func testShadowrocketUsesDocumentedRawConfigurationURLPath() throws {
@@ -76,6 +103,31 @@ final class DirectImportServiceTests: XCTestCase {
         XCTAssertNil(hiddify.fragment, "Hiddify 的名称由 Profile-Title 响应头传递，URL 片段不能显示成百分号乱码")
     }
 
+    func testV2BoxUsesDocumentedSubscriptionSchemeWithEncodedValues() throws {
+        let target = try XCTUnwrap(ClientTarget(rawValue: "v2box"))
+        let configurationURL = try XCTUnwrap(
+            URL(string: "http://127.0.0.1:7788/private/塔台.txt?token=a&revision=1")
+        )
+
+        let url = try ClientImportURLBuilder.make(
+            target: target,
+            configurationURL: configurationURL,
+            displayName: "塔台 节点",
+            contentMode: .nodesOnly
+        )
+
+        XCTAssertEqual(url.scheme, "v2box")
+        XCTAssertEqual(url.host, "install-sub")
+        let queryItems = try XCTUnwrap(
+            URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        )
+        XCTAssertEqual(
+            queryItems.first(where: { $0.name == "url" })?.value,
+            configurationURL.absoluteString
+        )
+        XCTAssertEqual(queryItems.first(where: { $0.name == "name" })?.value, "塔台 节点")
+    }
+
     func testLoonNodeImportUsesNamedRefreshableResourceURL() throws {
         let first = try ClientImportURLBuilder.make(
             target: .loon,
@@ -107,13 +159,16 @@ final class DirectImportServiceTests: XCTestCase {
         XCTAssertNotNil(nodeJSON["server_remote"])
         XCTAssertNil(nodeJSON["filter_remote"])
         XCTAssertTrue(nodeJSON["server_remote"]?.first?.contains("as-policy=static") == true)
-        XCTAssertFalse(ClientTarget.quanx.supportedContentModes.contains(.rulesOnly))
-        XCTAssertFalse(ClientTarget.quanx.supportsDirectImport(mode: .rulesOnly))
+        // Quantumult X offers node and filter resources but no way to carry a
+        // [policy] section, so a complete configuration is never presented as a
+        // one-click import for it.
+        XCTAssertEqual(ClientTarget.quanx.supportedContentModes, [.fullConfiguration, .nodesOnly])
+        XCTAssertFalse(ClientTarget.quanx.supportsDirectImport(mode: .fullConfiguration))
         XCTAssertThrowsError(
             try ClientImportURLBuilder.make(
                 target: .quanx,
                 configurationURL: localURL,
-                contentMode: .rulesOnly
+                contentMode: .fullConfiguration
             )
         )
     }
@@ -235,9 +290,9 @@ extension DirectImportServiceTests {
         XCTAssertNotNil(hiddify.host)
     }
 
-    func testOnlyQuantumultXStillLacksAScheme() {
+    func testOnlyQuantumultXAndV2BoxLackAFullConfigurationScheme() {
         let withoutScheme = ClientTarget.allCases.filter { !$0.supportsDirectConfigurationImport }
-        XCTAssertEqual(withoutScheme, [.quanx])
+        XCTAssertEqual(withoutScheme, [.quanx, .v2box])
     }
 }
 
@@ -247,6 +302,7 @@ extension DirectImportServiceTests {
     func testServedFileMatchesTheTargetFormat() {
         let expected: [ClientTarget: String] = [
             .clash: "application/yaml",
+            .clashApple: "application/yaml",
             .egern: "application/yaml",
             .hiddify: "application/json",
             .surge: "text/plain"

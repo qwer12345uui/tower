@@ -186,7 +186,9 @@ final class SubscriptionRefreshTests: XCTestCase {
         XCTAssertEqual(Set(requestedIDs), Set(sources.map(\.id)))
         XCTAssertEqual(maximumActiveRequestCount, sources.count)
         XCTAssertTrue(model.subscriptions.allSatisfy { $0.lastUpdatedAt != nil })
-        XCTAssertTrue(model.toast?.text.contains("7 个订阅已全部更新") == true)
+        XCTAssertTrue(
+            model.toast?.text.contains(String(localized: "\(sources.count) 个订阅已全部更新")) == true
+        )
     }
 
     func testPullToRefreshContinuesAfterOneSubscriptionFails() async throws {

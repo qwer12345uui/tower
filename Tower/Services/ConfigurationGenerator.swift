@@ -41,17 +41,25 @@ struct ConfigurationGenerator {
         preset: RulePreset,
         target: ClientTarget,
         countryCodes: [UUID: String] = [:],
-        excludedKinds: Set<ProxyKind> = []
+        excludedKinds: Set<ProxyKind> = [],
+        supportedKindsOverride: Set<ProxyKind>? = nil
     ) -> GeneratedConfiguration {
         let supported = uniquedNames(
-            nodes.filter { writes($0, to: target, excluding: excludedKinds) },
+            nodes.filter {
+                writes(
+                    $0,
+                    to: target,
+                    excluding: excludedKinds,
+                    supportedKindsOverride: supportedKindsOverride
+                )
+            },
             reservedNames: reservedProxyNames(for: preset)
         )
         let regionGroups = makeRegionGroups(nodes: supported, countryCodes: countryCodes)
         let content: String
         switch target {
-        case .clash:
-            content = clash(nodes: supported, preset: preset, regionGroups: regionGroups, target: .clash)
+        case .clash, .clashApple:
+            content = clash(nodes: supported, preset: preset, regionGroups: regionGroups, target: target)
         case .surge:
             content = surgeLike(nodes: supported, preset: preset, regionGroups: regionGroups, shadowrocket: false)
         case .shadowrocket:
@@ -69,6 +77,8 @@ struct ConfigurationGenerator {
             content = singBox(nodes: supported, preset: preset, regionGroups: regionGroups)
         case .egern:
             content = egern(nodes: supported, preset: preset, regionGroups: regionGroups)
+        case .v2box:
+            content = ""
         }
 
         return GeneratedConfiguration(
@@ -91,10 +101,18 @@ struct ConfigurationGenerator {
         target: ClientTarget,
         schemes: RuleSchemeRepository = RuleSchemeRepository(),
         excludedKinds: Set<ProxyKind> = [],
-        preferRuleSets: Bool = true
+        preferRuleSets: Bool = true,
+        supportedKindsOverride: Set<ProxyKind>? = nil
     ) -> GeneratedConfiguration {
         let supported = uniquedNames(
-            nodes.filter { writes($0, to: target, excluding: excludedKinds) },
+            nodes.filter {
+                writes(
+                    $0,
+                    to: target,
+                    excluding: excludedKinds,
+                    supportedKindsOverride: supportedKindsOverride
+                )
+            },
             reservedNames: Set(scheme.groups.map(\.name) + ["DIRECT", "REJECT", "direct", "reject"])
         )
         let resolved = resolveGroups(scheme: scheme, nodes: supported, target: target)
@@ -110,8 +128,8 @@ struct ConfigurationGenerator {
         )
         let content: String
         switch target {
-        case .clash:
-            content = clashScheme(scheme, groups: resolved, nodes: supported, target: .clash, rulePlan: rulePlan)
+        case .clash, .clashApple:
+            content = clashScheme(scheme, groups: resolved, nodes: supported, target: target, rulePlan: rulePlan)
         case .shadowrocket:
             content = clashScheme(scheme, groups: resolved, nodes: supported, target: .shadowrocket, rulePlan: rulePlan)
         case .surge:
@@ -124,6 +142,8 @@ struct ConfigurationGenerator {
             content = singBoxScheme(scheme, groups: resolved, nodes: supported, rulePlan: rulePlan)
         case .egern:
             content = egernScheme(scheme, groups: resolved, nodes: supported, rulePlan: rulePlan)
+        case .v2box:
+            content = ""
         }
 
         return GeneratedConfiguration(
@@ -183,6 +203,11 @@ struct ConfigurationGenerator {
             let generator = ProxyNodeShareLinkGenerator()
             content = supported.map { generator.canonicalLink(for: $0) }.joined(separator: "\n")
                 + (supported.isEmpty ? "" : "\n")
+        case .v2box:
+            let generator = ProxyNodeShareLinkGenerator()
+            let links = supported.map { generator.canonicalLink(for: $0) }
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            content = Data(links.joined(separator: "\n").utf8).base64EncodedString()
         default:
             content = ""
             supported = []
@@ -200,79 +225,17 @@ struct ConfigurationGenerator {
         )
     }
 
-    /// Builds a Quantumult X `filter_remote` snippet. Direct/reject rules stay
-    /// local decisions, while every proxy policy is routed through the static
-    /// policy created by the separately imported Tower node resource.
-    func generateQuanXRuleSubscription(
-        from configuration: GeneratedConfiguration,
-        profileName: String = TowerBrand.localizedName
-    ) -> GeneratedConfiguration {
-        guard configuration.target == .quanx else {
-            return GeneratedConfiguration(
-                target: configuration.target,
-                content: "",
-                supportedNodeCount: 0,
-                skippedNodeCount: configuration.skippedNodeCount,
-                ruleCount: 0,
-                profileName: profileName,
-                contentMode: .rulesOnly,
-                fileExtensionOverride: "list"
-            )
-        }
-
-        let lines = configuration.content.components(separatedBy: .newlines)
-        guard let sectionStart = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "[filter_local]" }) else {
-            return GeneratedConfiguration(
-                target: .quanx,
-                content: "",
-                supportedNodeCount: 0,
-                skippedNodeCount: configuration.skippedNodeCount,
-                ruleCount: 0,
-                profileName: profileName,
-                contentMode: .rulesOnly,
-                fileExtensionOverride: "list"
-            )
-        }
-
-        var resourceLines: [String] = []
-        for line in lines.dropFirst(sectionStart + 1) {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.hasPrefix("[") { break }
-            guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), !trimmed.hasPrefix(";") else { continue }
-            var fields = trimmed.split(separator: ",", omittingEmptySubsequences: false)
-                .map { String($0).trimmingCharacters(in: .whitespaces) }
-            guard fields.count >= 2 else { continue }
-            let policyIndex = fields.last?.lowercased() == "no-resolve"
-                ? fields.index(before: fields.index(before: fields.endIndex))
-                : fields.index(before: fields.endIndex)
-            let policy = fields[policyIndex].lowercased()
-            if policy != "direct" && policy != "reject" {
-                fields[policyIndex] = ExportFilePresentation.profileName(profileName)
-            }
-            resourceLines.append(fields.joined(separator: ", "))
-        }
-
-        return GeneratedConfiguration(
-            target: .quanx,
-            content: resourceLines.joined(separator: "\n") + (resourceLines.isEmpty ? "" : "\n"),
-            supportedNodeCount: 0,
-            skippedNodeCount: configuration.skippedNodeCount,
-            ruleCount: resourceLines.count,
-            profileName: profileName,
-            contentMode: .rulesOnly,
-            fileExtensionOverride: "list"
-        )
-    }
-
     /// A node reaches the configuration when the client can express it and the
     /// user has not excluded that protocol. Excluded nodes stay in the input so
     /// they are reported as skipped rather than vanishing from the counts.
     private func writes(
         _ node: ProxyNode,
         to target: ClientTarget,
-        excluding excludedKinds: Set<ProxyKind>
+        excluding excludedKinds: Set<ProxyKind>,
+        supportedKindsOverride: Set<ProxyKind>? = nil
     ) -> Bool {
-        guard target.supports(node.kind), !excludedKinds.contains(node.kind) else { return false }
+        let supportsKind = supportedKindsOverride?.contains(node.kind) ?? target.supports(node.kind)
+        guard supportsKind, !excludedKinds.contains(node.kind) else { return false }
         // An id that is neither a UUID nor short enough for Xray's name mapping
         // has no faithful form; writing it blank would look fine and never
         // connect.
@@ -300,7 +263,7 @@ struct ConfigurationGenerator {
         if node.usesReality, !target.expressesReality { return false }
         // Clash and Stash implement Snell only up to version 3, so a v4+ node
         // is skipped there rather than written as a proxy they would reject.
-        if node.kind == .snell, target == .clash, (node.version ?? 4) >= 4 { return false }
+        if node.kind == .snell, [.clash, .clashApple].contains(target), (node.version ?? 4) >= 4 { return false }
         // Surge and Shadowrocket carry Hysteria 2's obfuscator in the key name
         // — `salamander-password` and a bare `obfsParam` — so neither has any
         // way to say "some other obfuscator". (Surge also documents its own
@@ -315,7 +278,7 @@ struct ConfigurationGenerator {
             // SIP003 directly or have a documented equivalent; the others must
             // skip instead of silently exporting plain Shadowsocks.
             guard node.transport == "ws",
-                  [.clash, .shadowrocket, .quanx, .hiddify].contains(target) else { return false }
+                  [.clash, .clashApple, .shadowrocket, .quanx, .hiddify].contains(target) else { return false }
         }
         if !canExpressTransport(of: node, on: target) { return false }
         return true
@@ -326,7 +289,7 @@ struct ConfigurationGenerator {
         let transport = node.transport?.lowercased() ?? "tcp"
         if transport == "tcp" || transport.isEmpty { return true }
         switch target {
-        case .clash:
+        case .clash, .clashApple:
             if transport == "xhttp" { return node.kind == .vless }
             return ["ws", "http", "h2", "grpc", "httpupgrade"].contains(transport)
         case .surge:
@@ -344,6 +307,9 @@ struct ConfigurationGenerator {
         case .egern:
             if node.kind == .trojan { return ["ws", "http"].contains(transport) }
             return ["ws", "http", "h2", "grpc"].contains(transport)
+        case .v2box:
+            return ["ws", "http", "h2", "grpc", "httpupgrade", "xhttp"].contains(transport)
+                && (transport != "xhttp" || node.kind == .vless)
         }
     }
 
@@ -467,7 +433,7 @@ struct ConfigurationGenerator {
 
         guard let finalGroup = plan.finalGroupName else { return output }
         switch target {
-        case .clash: output += "\(indent)MATCH,\(finalGroup)\n"
+        case .clash, .clashApple: output += "\(indent)MATCH,\(finalGroup)\n"
         case .quanx: output += "\(indent)final, \(finalGroup)\n"
         default: output += "\(indent)FINAL,\(finalGroup)\n"
         }
@@ -1860,7 +1826,7 @@ struct ConfigurationGenerator {
     private func mappedRule(_ rule: String, policy: RulePolicy, target: ClientTarget) -> String? {
         let policyName: String
         switch target {
-        case .clash: policyName = clashPolicyName(policy)
+        case .clash, .clashApple: policyName = clashPolicyName(policy)
         case .quanx: policyName = quanXPolicyName(policy)
         default: policyName = surgePolicyName(policy)
         }
@@ -1879,7 +1845,7 @@ struct ConfigurationGenerator {
         // Clash/Mihomo does not implement Surge's URL-REGEX dialect. These
         // expressions may inspect the URL path, so converting them to a domain
         // rule would silently change their meaning; omit them for Clash only.
-        if target == .clash, ruleType == "URL-REGEX" {
+        if [.clash, .clashApple].contains(target), ruleType == "URL-REGEX" {
             return nil
         }
 
@@ -1907,6 +1873,15 @@ struct ConfigurationGenerator {
             parts.insert(policyName, at: parts.count - 1)
         } else {
             parts.append(policyName)
+            if ruleType == "GEOIP" {
+                // A GEOIP rule above later domain rules otherwise makes the
+                // client resolve the domain locally just to decide whether it
+                // matches — and the domains that reach it are the ones no rule
+                // list covered. Every built-in preset already writes the flag
+                // for all seven clients; an imported scheme must not route
+                // differently on Stash than it does on Surge.
+                parts.append("no-resolve")
+            }
         }
         let separator = target == .quanx ? ", " : ","
         return parts.joined(separator: separator)
@@ -2230,14 +2205,7 @@ extension ConfigurationGenerator {
 
         let configuration: [String: Any] = [
             "log": ["level": "warn", "timestamp": true],
-            "dns": [
-                "servers": [
-                    ["tag": "remote", "address": "https://1.1.1.1/dns-query", "detour": RulePolicy.select.configurationName],
-                    ["tag": "local", "address": "https://223.5.5.5/dns-query", "detour": Self.singBoxDirectTag]
-                ],
-                "final": "local",
-                "strategy": "prefer_ipv4"
-            ],
+            "dns": singBoxDNS(),
             "inbounds": [[
                 "type": "tun",
                 "tag": "tun-in",
@@ -2250,6 +2218,7 @@ extension ConfigurationGenerator {
             "route": [
                 "rules": singBoxRules(preset: preset),
                 "final": preset.finalPolicy.configurationName,
+                "default_domain_resolver": "local",
                 "auto_detect_interface": true
             ],
             "experimental": [
@@ -2268,6 +2237,39 @@ extension ConfigurationGenerator {
 
     static let singBoxDirectTag = "DIRECT"
     static let singBoxRejectTag = "REJECT"
+
+    /// Current sing-box DNS schema (1.12+). Keeping it in one place prevents
+    /// imported rule schemes from falling back to the removed legacy
+    /// `address: https://...` server representation.
+    ///
+    /// These servers use literal IP addresses, so the current typed DoH
+    /// dialer can connect directly without a `detour`. Omitting it is also
+    /// important for imported schemes: their selector tags are user-defined
+    /// and must not be coupled to the built-in "node select" display name.
+    private func singBoxDNS() -> [String: Any] {
+        [
+            "servers": [
+                [
+                    "type": "https",
+                    "tag": "remote",
+                    "server": "1.1.1.1",
+                    "server_port": 443,
+                    "path": "/dns-query",
+                    "tls": ["enabled": true, "server_name": "cloudflare-dns.com"]
+                ],
+                [
+                    "type": "https",
+                    "tag": "local",
+                    "server": "223.5.5.5",
+                    "server_port": 443,
+                    "path": "/dns-query",
+                    "tls": ["enabled": true, "server_name": "dns.alidns.com"]
+                ]
+            ],
+            "final": "local",
+            "strategy": "prefer_ipv4"
+        ]
+    }
 
     /// Policies whose whole point is to drop traffic.
     ///
@@ -2532,6 +2534,7 @@ extension ConfigurationGenerator {
         nodes: [ProxyNode],
         rulePlan: RuleSetEmissionPlanner.Plan
     ) -> String {
+        let finalGroup = rulePlan.finalGroupName ?? groups.first?.name ?? Self.singBoxDirectTag
         var outbounds: [[String: Any]] = groups.map { group in
             var outbound: [String: Any] = [
                 "tag": group.name,
@@ -2546,10 +2549,23 @@ extension ConfigurationGenerator {
             return outbound
         }
         outbounds += nodes.compactMap(singBoxOutbound)
+
+        // A route-level `action: reject` is sufficient for direct blocking
+        // rules, but selectors cannot reference an action. Imported schemes
+        // commonly expose choices such as [REJECT, DIRECT], so provide the
+        // concrete dependency only when the imported graph actually needs it.
+        let needsRejectOutbound = groups.contains { group in
+            group.members.contains { $0.uppercased() == Self.singBoxRejectTag }
+        } || finalGroup.uppercased() == Self.singBoxRejectTag
+        let alreadyDefinesReject = outbounds.contains {
+            ($0["tag"] as? String)?.uppercased() == Self.singBoxRejectTag
+        }
+        if needsRejectOutbound && !alreadyDefinesReject {
+            outbounds.append(["tag": Self.singBoxRejectTag, "type": "block"])
+        }
         outbounds.append(["tag": Self.singBoxDirectTag, "type": "direct"])
 
         var rules: [[String: Any]] = []
-        let finalGroup = rulePlan.finalGroupName ?? groups.first?.name ?? Self.singBoxDirectTag
         var pendingGroup: String?
         var pendingFields: [String: [String]] = [:]
 
@@ -2612,12 +2628,14 @@ extension ConfigurationGenerator {
         var route: [String: Any] = [
             "rules": rules,
             "final": finalGroup,
+            "default_domain_resolver": "local",
             "auto_detect_interface": true
         ]
         if !remoteRuleSets.isEmpty { route["rule_set"] = remoteRuleSets }
 
         let configuration: [String: Any] = [
             "log": ["level": "warn", "timestamp": true],
+            "dns": singBoxDNS(),
             "inbounds": [[
                 "type": "tun",
                 "tag": "tun-in",
@@ -2786,7 +2804,19 @@ extension ConfigurationGenerator {
         guard parts.count >= 2,
               let matcher = Self.egernRuleMatchers[parts[0].uppercased()],
               !parts[1].isEmpty else { return nil }
-        return "  - \(matcher):\n      match: \(yaml(parts[1]))\n      policy: \(yaml(policy))\n"
+
+        // Egern spells the flag as a neighbouring key rather than a trailing
+        // field, which is why it used to be dropped here. GEOIP always skips
+        // resolution, matching the built-in presets and the other six clients;
+        // an IP rule keeps whatever the source file asked for.
+        let isIPMatcher = matcher == "geoip" || matcher == "ip_cidr"
+        let skipsResolution = isIPMatcher
+            && (parts[0].uppercased() == "GEOIP"
+                || parts.dropFirst().contains { $0.lowercased() == "no-resolve" })
+
+        var line = "  - \(matcher):\n      match: \(yaml(parts[1]))\n"
+        if skipsResolution { line += "      no_resolve: true\n" }
+        return line + "      policy: \(yaml(policy))\n"
     }
 
     private static let egernRuleMatchers: [String: String] = [
@@ -2846,7 +2876,6 @@ extension ConfigurationGenerator {
             // Egern wants a list here even for the single value a URI carries.
             let alpn = ALPNList.values(node.alpn)
             body.append("      alpn: [\((alpn.isEmpty ? ["h3"] : alpn).map(yaml).joined(separator: ", "))]")
-            if node.skipCertificateVerification { body.append("      skip_tls_verify: true") }
         case .wireguard:
             type = "wireguard"
             endpoint()

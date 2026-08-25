@@ -305,7 +305,7 @@ final class TUICHysteriaTests: XCTestCase {
     // MARK: - Client support
 
     func testTUICSupportMatchesWhatEachClientImplements() {
-        let supported: Set<ClientTarget> = [.surge, .shadowrocket, .clash, .hiddify, .egern]
+        let supported: Set<ClientTarget> = [.surge, .shadowrocket, .clash, .clashApple, .hiddify, .egern]
         for target in ClientTarget.allCases {
             XCTAssertEqual(
                 target.supports(.tuic),
@@ -318,7 +318,7 @@ final class TUICHysteriaTests: XCTestCase {
     func testHysteria1SupportMatchesWhatEachClientImplements() {
         // Surge, Loon, Quantumult X and Egern all ship Hysteria 2 but never
         // shipped Hysteria 1.
-        let supported: Set<ClientTarget> = [.shadowrocket, .clash, .hiddify]
+        let supported: Set<ClientTarget> = [.shadowrocket, .clash, .clashApple, .hiddify]
         for target in ClientTarget.allCases {
             XCTAssertEqual(
                 target.supports(.hysteria),
@@ -519,7 +519,11 @@ final class TUICHysteriaTests: XCTestCase {
         XCTAssertTrue(content.contains("tuic:"), content)
         XCTAssertTrue(content.contains("uuid: \"3d3ab7b1-4a63-4f2e-9c1d-6b0e5a2f8c47\""), content)
         XCTAssertTrue(content.contains("alpn: [\"h3\"]"), content)
-        XCTAssertTrue(content.contains("skip_tls_verify: true"), content)
+        XCTAssertEqual(
+            content.components(separatedBy: "skip_tls_verify: true").count - 1,
+            1,
+            "Egern 的 TUIC 映射只能写一次 skip_tls_verify：\(content)"
+        )
     }
 
     func testHiddifyWritesSingBoxOutbounds() throws {

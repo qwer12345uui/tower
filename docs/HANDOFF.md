@@ -102,8 +102,16 @@ ACL4SSR 的 `.ini` 自带策略组定义，和塔台固定的 `RulePolicy` 枚�
 
 ### 真机安装
 
-不需要登录 Apple ID。`.derived-data-device` 里留有一份仍然有效的开发描述文件，已装到
-`~/Library/MobileDevice/Provisioning Profiles/<描述文件 UUID>.mobileprovision`：
+本机开发、签名、安装和启动统一使用 Xcode Beta。不要依赖 `xcode-select` 的当前值；它可能指向正式版 Xcode，而开发账号和团队登录在 Xcode Beta。先固定工具链，再运行后续命令：
+
+```sh
+export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
+```
+
+如果命令行提示没有账号或团队，先确认 `xcodebuild -version` 来自 Xcode Beta，不要直接判断用户未登录。下面的 `xcodebuild` 和 `xcrun devicectl` 必须在同一个 `DEVELOPER_DIR` 环境中执行。
+
+Xcode Beta 已登录开发账号，无需重复登录；优先使用自动签名。新版 Xcode 管理的开发描述文件位于
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles/`；旧版才可能使用 `~/Library/MobileDevice/Provisioning Profiles/`。本机已有一份仍然有效的开发描述文件：
 
 - `iOS Team Provisioning Profile: *`，团队 `<TEAM_ID>`，通配 App ID，有效期到 2027-07-29
 - 授权设备 UDID `<设备 UDID>`，即这台 iPhone 17 Pro
@@ -348,6 +356,12 @@ Shadowrocket 的 `obfsParam=` 只有手册出处，还没真机验过：**下次
 
 引导页只出现一次，之后想核对它的说法就没地方看了，所以设置页底部放一条可点的小行进去，点开是同样四条。做成一行而不是第五张整宽卡片：这是需要时才查的说明，不是每次进设置都要看的开关。两处共用 `WelcomeView.promises` 和 `PromiseRow`——隐私声明在两个地方说得不一样，比只说一次更糟。
 
+### 设置页的「重置所有配置」
+
+设置页最底部提供破坏性的“重置所有配置”。执行前必须用居中的 alert 明确确认；确认后清空本机订阅、自建节点、规则导入与自定义、导出偏好、测速和地区缓存，停止局域网共享并更换访问密钥，关闭续费提醒和本机 iCloud 同步，最后持久化为首次安装的默认状态。设置页里正在编辑的配置名称也要同时恢复为“塔台”，避免点“完成”时把旧草稿重新写回。
+
+重置只处理这台设备，不删除 iCloud 上的远端副本，也不撤销通知或本地网络等系统权限。前者可能仍被另一台设备使用，后两者只能由系统设置管理；确认文案必须把这些边界说清楚。删除 iCloud 副本仍由 iCloud 设置卡片里的独立操作负责。
+
 ### Clash YAML：嵌套序列会把节点截断（2026-08-10）
 
 `parseClashYAML` 判断「新节点开始」只看 `trimmed.hasPrefix("-")`，不看缩进。机场写的
@@ -496,6 +510,70 @@ TestFlight 反馈提到「配置没有防 DNS 泄漏功能」。核对下来比�
 
 功能已验证，可以在 App Store Connect 打开「在 Apple 芯片 Mac 上提供」。打开之后 Mac 就是要长期维护的第二个平台：它的网络环境比 iPhone 复杂（多网卡、雷雳网桥、VPN 虚拟网卡），`LANIPv4Address` 里 en0 优先的排序在 Mac 上不保证挑对接口，这是后续最可能出问题的地方。
 
+## 1.9 2026-08-21 代码审查修复
+
+第二次完整代码审查后的修复，全部带回归测试（`ReviewFixTests` 新增 12 条，另有若干既有测试按新形状更新）。审查范围是数据逻辑、操作逻辑和流畅度；AppModel 拆分与信息架构调整属于产品决策，本轮明确不做。
+
+### 数据逻辑
+
+| 问题 | 影响 | 修复 |
+| --- | --- | --- |
+| `apply()` 不恢复 `lastLocalEditAt` | 启动后 `lastLocalEditAt` 为 nil，前台同步用 `.distantPast` 比对，**任何**远端快照都会赢——包括更旧的那份，随后覆盖本地文件。离线时改的订阅在下次启动被静默丢弃 | `apply()` 恢复 `snapshot.updatedAt`；同时清掉属于已替换节点 id 的测速与地区缓存 |
+| 批量添加订阅时一条失败即整批作废 | 粘 5 条第 3 条 404，一条都加不进去 | 逐条判定；成功的入库，失败的走既有 `SubscriptionRefreshReport` 列出。全失败仍抛错以留住添加面板；显式取消则整批放弃 |
+| 刷新后排除状态按 `kind\|server\|port\|name\|rawURI` 匹配 | 机场把剩余流量/倍率写进 remark，塔台自己也会给纯国旗节点重编号——名字一变即失配，被排除的节点**静默回到每一份导出配置** | `carriedOverExclusions`：先精确匹配，失配再用去掉 remark 的宽松键，且**只有该键在刷新前后都唯一时才认**，避免反向误排除 |
+| 配额探测与主请求并发打同一 host | 抵消了 `subscriptionIDsGroupedByHost` 按 host 排队的防限流设计，单个订阅即产生 2 个并发请求 | 改为「确实缺配额时才发、且在主请求之后」 |
+| iCloud 副本无法删除 | `CloudSyncStore.removeRemoteSnapshot()` 从无调用方，设置页却明说「关闭同步不会删除已有副本」，上传成了单向门 | 关闭同步时提供「关闭并删除 iCloud 副本 / 只关闭同步」；关闭后设置页保留独立删除入口 |
+| IP 地区解析结果不落盘 | 每次冷启动都要为所有「名字看不出地区」的节点重跑 `getaddrinfo` | 按 **host** 持久化（不是节点 id——id 每次解析都重新生成）；随快照按当前节点剪枝 |
+
+### 流畅度
+
+| 问题 | 影响 | 修复 |
+| --- | --- | --- |
+| `RuleDownloadStore` 每次调用都重读并重切文件 | 规则页对每个方案的每个规则集、每帧都走一遍。ACL4SSR 一套约 430 KB，单文件最大 191 KB。**内置快照有缓存，下载的方案完全没有** | 加按 mtime + size 失效的解析缓存；`isClashProviderYAML` 复用同一份，不再为判类型二次读盘 |
+| 仅节点模式先生成完整配置再丢弃 | 四个支持该模式的客户端，每帧付两笔；且节点订阅自身从不缓存 | `contentMode` 进缓存键，仅节点走独立轻量路径 |
+| `persist()` 主线程全量编码 + 落盘，每个开关调一次 | 实测 500 节点约 5 ms/次（模拟器，真机更慢），正好落在响应点击的那一帧里 | 新增 `PersistencePolicy`：App 用 250 ms 合并写，退到后台强制 flush。**默认仍是 `.immediate`**，测试语义不变 |
+| 地图卡片每帧做 5 遍全量聚类 | 地区解析按 8 个一批 merge，每批触发 5 遍全表聚类 | body 内算一次传下去 |
+| 节点筛选页每帧过滤 5 遍 | 每次求值都解析显示名并做 4 次不区分大小写搜索，搜索框输入可感延迟 | 同上 |
+| 折叠的订阅卡片仍复制整个节点数组 | 每帧为每个卡片复制其全部节点（含各 String 字段） | 折叠时只用 `nodeCount(for:)` 计数 |
+| 每个 HTTP 请求新建 `URLSession` | 连接与 TLS 会话不复用，刷新 10 个订阅即 10 次完整握手 | 共享一个 ephemeral session；顺带彻底关闭 cookie 处理 |
+| 逐行 DNS 请求各自成「一批」 | 并发 `getaddrinfo` 数等于可见行数；靠上层页面预先整体解析才没炸 | 逐行请求汇入统一队列（50 ms 合并窗口） |
+
+### 操作逻辑
+
+- **删除不可达的 `.rulesOnly`**。`supportedContentModes` 只返回 `[.fullConfiguration, .nodesOnly]`，`decodeExportContentModes` 还会把它过滤掉，用户永远选不到、旧存档也恢复不出来，但生产代码里留着 9 处分支和一个生成器方法。`ExportView.modeExplanation` 给它和 `.fullConfiguration` 返回同一句话，是当初就没想清楚的证据。枚举 case、生成器、分支、两个测试一并移除。
+- **添加/编辑订阅的「取消」现在真的取消**。此前是脱离结构的 `Task`，面板关掉后请求继续跑完（最长 30 秒 × 多次 UA 尝试），仍会把订阅加进去并弹「已添加」。改为持有 task，取消与 `onDisappear` 都会 cancel。
+- **搜索框文案**：按产品要求使用 `在线搜索规则：如 YouTube OpenAI`，并由回归测试固定，避免后续整理文案时再次误改。
+- **Toast 出现有动画了**。`showToast` 直接赋值、不在任何 transaction 内，插入过渡从不运行——每条提示都是「啪」地出现再优雅滑走。改由 toast id 驱动整段动画。
+
+### 本地化
+
+Xcode 提取器（`xcodebuild -exportLocalizations`）比对发现 **42 条**源码能显示但目录里没有的文案，全部会在其余 14 种语言下直接显示中文。已按 15 种语言补齐（630 条译文），格式符逐条校验。
+
+此前用 grep 手写的扫描只找到 7 条——`Text("…")`、`Label`、`.navigationTitle`、`.accessibilityHint`、`Section`、`TextField` 占位符、弹窗标题等位置全部漏掉，插值也无法还原成 `%@` / `%lld`。因此新增 `Scripts/check_localization.sh` 调用 Xcode 自己的提取器比对，**不要改回 grep 实现**。
+
+**两个脚本的分工**：`check_localization.sh` 负责**发现**缺口（只读，跑完不改动任何文件），既有的 `generate_localizations.py` 负责**填补**（从 Xcode 导出的源目录机器翻译并生成两份目录）。README 一直记着后者的用法，缺口积到 42 条说明那一步被跳过了，而当时没有任何东西会因此报错——现在有了。
+
+**这 42 条是手写翻译，没走生成器**，因为其中大量是 `已选` / `未选` / `好` / `候选策略` 这类短标签和无障碍文案，机器翻译在缺上下文时容易失准。后续批量补文案仍建议先跑生成器再人工过一遍短标签。
+
+两个必须知道的坑：
+
+- **提取器会误报「无用条目」**。它给 72 条打了 `extractionState: stale`，其中包括 `ACL4SSR 默认` / `精简` / `全分组` 及其简介——这些来自 `ACL4SSR_manifest.json`，运行时经 `String(localized: String.LocalizationValue(name))` 本地化，静态提取看不见。照着 stale 清理会把内置方案名的翻译全删掉。
+- **提取会改写源文件**。`-exportLocalizations` 直接往目录里写新键、打 stale 标记，并按自己的 JSON 风格重排整个文件（`InfoPlist.xcstrings` 也会被动）。脚本已做备份/还原，跑完不留任何改动。
+
+`LocalizationTests` 只守了 4 个 InfoPlist 键里的 3 个，`CFBundleName` 翻译齐全却无人看管——已纳入。
+
+### 本轮明确未做
+
+- **DoH 仍是进程级设置。** 加密解析器只能配在 `NWParameters.PrivacyContext` 上，URLSession 没有任何途径挂载；真要隔离须用 NWConnection 手写 HTTP 客户端（TLS、重定向、分块编码自理）。`SubscriptionRequestGate` 只能排开订阅请求，同时刻的规则下载、测速、地区查询仍受影响。约束已写进 `applyDNSOverHTTPS` 的注释。
+- **导出页仍是同步生成、无加载态。** 改异步要给 `.task(id:)` 编一个含目标客户端、内容模式、协议过滤、节点、规则方案、配置名、`preferRuleSets` 的复合 id，漏掉任一项都会**静默导出陈旧配置**。用这个风险换开标签页时的一次卡顿不划算；仅节点缓存已让来回切换变廉价。
+- **局域网共享仍在主线程生成配置。** 有缓存兜底，且该功能本就要求 App 在前台，收益不抵改动面。
+- **`effectiveScheme` 未做记忆化。** 磁盘缓存修好后剩下的 `customized()` 开销与策略组数量（几十个）成正比，不再与规则行数相关；记忆化需要一个覆盖全部定制输入的失效键，算错就会用陈旧方案生成配置。
+- **Toast 仍是单槽位。** 批量刷新路径已自行抑制中间提示，实际重叠场景罕见。
+
+### 一个自我撤销
+
+配额探测原本还加了「记住这个 host 不返回配额头」的缓存，写完发现有缺陷：一旦标记就永不再探测，`recordQuota` 再也走不到，机场之后开始发送配额头也不会恢复；且为进程级可变状态，会让测试相互污染。收益仅为每次刷新省一个请求，已移除。
+
 ## 2. 产品目标与确定的交互
 
 ### 首页
@@ -505,8 +583,8 @@ TestFlight 反馈提到「配置没有防 DNS 泄漏功能」。核对下来比�
 - 订阅可展开节点，但不显示“更多节点”，展开使用透明度/布局变化，不从顶部滑入。
 - 节点行显示 IP 国家/地区 Logo、名称、协议/传输/UDP 信息和真实延迟。
 - 订阅和单节点都可以分享；单节点导出协议链接和二维码。
-- 页面直接嵌入自绘的点阵世界地图（`WorldDotMapView`，不用 MapKit），显示带 Emoji 的节点标注，不单独设置“地球”标签页。
-- 世界点阵保留完整 `-180...180` 经度；斐济、新西兰和格陵兰不会再因裁剪被压到地图边缘。密集地区会按选中状态/节点数优先，再尝试 16 个近邻位置，无法避让的低权重文字才隐藏，节点本身始终显示。
+- 页面直接嵌入自绘的点阵世界地图（`WorldDotMapView`，不用 MapKit），有节点覆盖的国家直接把其地图点显示为鲜明绿色，当前选中国家用更深、更密的绿色；未覆盖国家保持灰色，不再叠加独立绿色定位点。
+- 世界点阵保留完整 `-180...180` 经度；斐济、新西兰和格陵兰不会再因裁剪被压到地图边缘。地图支持缩放、拖动和分层标签，密集地区按节点数稳定取舍文字。覆盖国家的整个点阵轮廓都可直接点击，选中标签使用中性文字和材质底色，不用绿字压在绿色地图上。
 
 ### 规则页
 
@@ -525,6 +603,7 @@ TestFlight 反馈提到「配置没有防 DNS 泄漏功能」。核对下来比�
 - 主按钮固定在标签栏上方，一次点击就通过客户端 Scheme 导入。
 - Surge、Stash/Clash、Shadowrocket、Loon 使用本地临时 URL；Quantumult X 使用文件分享。
 - 支持配置摘要和完整预览，但不要在客户端切换动画中同步重复生成大文本。
+- 摘要和完整预览按配置语义着色：注释使用次要文字，INI 分区及键、YAML 顶层分类、URL、字符串、数字分色显示，并随深浅色模式调整对比度。着色层不得改写源文或破坏选择复制。
 
 ## 3. 已完成的关键实现
 
@@ -552,7 +631,7 @@ Quantumult X 的公开 Scheme 只覆盖远程资源操作，无法可靠导入�
 
 ### 局域网订阅与“透传”
 
-`LANSubscriptionServer` 是单独的用户可控服务，不要和 `DirectImportService` 合并：前者绑定 Wi-Fi、持续到用户关闭或 App 被系统挂起，后者只绑定 `127.0.0.1` 且 45 秒自动关闭。设置页会展示带 32 位随机访问密钥的地址，密钥可手动轮换，旧链接立即失效。
+`LANSubscriptionServer` 是单独的用户可控服务，不要和 `DirectImportService` 合并：前者绑定 Wi-Fi、持续到用户关闭或 App 被系统挂起，后者只绑定 `127.0.0.1` 且 45 秒自动关闭。导出页把“局域网订阅”作为客户端式目的地展示；用户选择该目的地时立即启动服务，并集中提供启停、自动/显式目标格式、带 32 位随机访问密钥的地址、二维码和使用说明，设置页只保留跳转入口。密钥可手动轮换，旧链接立即失效。局域网目的地不能加入 `ClientTarget`，因为它不是一种配置格式，而是按请求方 User-Agent 或 `target=` 参数选择实际格式的传输入口。
 
 - 路由：`/sub/<token>?target=auto`，另兼容 `/download/<token>`；支持 GET/HEAD。
 - 自动识别：OpenClash 的 `clash.meta`、Clash Verge/Mihomo/Stash、Surge、Shadowrocket、Loon、Quantumult X、Hiddify/sing-box、Egern。
@@ -597,10 +676,12 @@ SSH 登录落在 launchd 的 `Background` 域，`codesign` 取不到钥匙串私
 ```sh
 security unlock-keychain ~/Library/Keychains/login.keychain-db
 
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer && cd ~/tower-release && xcodebuild -project Tower.xcodeproj -scheme Tower -configuration Release -destination 'generic/platform=iOS' -archivePath ~/tower-release/build/Tower-1.0-18.xcarchive -allowProvisioningUpdates DEVELOPMENT_TEAM=G63LDXL9QJ CODE_SIGN_STYLE=Automatic archive
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer && cd ~/tower-release && xcodebuild -project Tower.xcodeproj -scheme Tower -configuration Release -destination 'generic/platform=iOS' -archivePath ~/tower-release/build/Tower-1.0-18.xcarchive -allowProvisioningUpdates DEVELOPMENT_TEAM="$TOWER_DEVELOPMENT_TEAM" CODE_SIGN_STYLE=Automatic archive
 
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer && cd ~/tower-release && xcodebuild -exportArchive -archivePath ~/tower-release/build/Tower-1.0-18.xcarchive -exportOptionsPlist Config/ExportOptions-TestFlight.plist -allowProvisioningUpdates
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer && cd ~/tower-release && cp Config/ExportOptions-TestFlight.plist /tmp/TowerExportOptions.plist && /usr/libexec/PlistBuddy -c "Add :teamID string $TOWER_DEVELOPMENT_TEAM" /tmp/TowerExportOptions.plist && xcodebuild -exportArchive -archivePath ~/tower-release/build/Tower-1.0-18.xcarchive -exportOptionsPlist /tmp/TowerExportOptions.plist -allowProvisioningUpdates
 ```
+
+`TOWER_DEVELOPMENT_TEAM` 来自那台机器上未入库的 `Config/release.local.sh`。团队 ID 不写进仓库，`Config/ExportOptions-TestFlight.plist` 因此不含 `teamID`，需要在导出前补上——`Scripts/release_testflight_remote.sh` 会自动做这件事，上面是手动兜底的等价写法。
 
 `DEVELOPER_DIR` 不能省：那台机器的 `xcode-select` 指向 CommandLineTools，改它要 sudo，用环境变量绕过。`Config/ExportOptions-TestFlight.plist` 是仓库内受版本控制的上传配置，使用 `destination: upload`，第三条直接传到 App Store Connect，不用开 Organizer。归档前务必 `git pull` 并确认 `CURRENT_PROJECT_VERSION` 是新值。
 
@@ -617,7 +698,7 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer && cd ~/tower-re
 
 ## 5. 远程 Mac 归档说明
 
-远程构建机位于同一局域网，主机为 `jzb@<构建机地址>`，已经登录 Apple 开发者账号。凭据和登录密码不写入仓库，也不应发给接手模型保存。
+远程构建机位于同一局域网，主机为 `<用户名>@<构建机地址>`，已经登录 Apple 开发者账号。凭据和登录密码不写入仓库，也不应发给接手模型保存。
 
 该机器的默认 `xcode-select` 曾指向 Command Line Tools，构建命令需要显式指定：
 
@@ -651,6 +732,7 @@ User interaction is not allowed.
 2026-08-03 那份成功上传的归档，实际签名就是 `Apple Development: …`。归档阶段用开发证书签名属正常流程，**分发签名发生在 Distribute / `-exportArchive` 这一步**，Xcode 会重新签名，分发证书可以由 Apple 云端托管、本地钥匙串不留私钥。
 
 所以排查上传问题时，不要以 `security find-identity` 里没有 Distribution 证书作为判据。
+发布脚本的预检会从 `security find-identity -v -p codesigning` 中接受同团队的有效 Development 或 Distribution 身份；仅有证书而没有可用私钥时会在归档前直接失败。
 
 归档命令基线：
 
@@ -688,6 +770,26 @@ xcodebuild -project Tower.xcodeproj \
 - **`method` 那条差异大概率是症状不是病因。** 能用的节点是 `"method": "auto"`、坏的是 `""`，但手册的 VLESS 示例里没有 `method=`，`auto` 更像 Shadowrocket 解析成功后自己填的默认值。
 
 **验收状态**：生成语法及回归测试已通过；XHTTP 已按报告人的可用导出值修正。真机导入后的实际连通性仍以节点服务端和 Shadowrocket 当前版本为准，发布后继续观察 issue 反馈。
+
+### 已实现：订阅展开后展示机场公告（2026-08-25）
+
+订阅卡保持原来的紧凑收起高度；展开后，节点列表前会出现一块中性的「机场公告」区域，
+完整显示机场写入订阅的重置日、官网、客服、续费提醒等自由文本。公告和节点共用原有的
+展开事务，没有额外的弹出动画或材质层；长文支持自动换行与选择复制。
+
+展示仍由 `SubscriptionUsage.distinctNotices` 驱动：已有结构化流量、到期数据时，重复的
+配额/到期句子不会再显示；带「重置」「续费」「客服」等含义的可操作公告即使也出现
+「流量」或「到期」字样仍会保留。相同公告只展示第一次，空白行忽略。
+
+回归覆盖在 `SubscriptionUsageTests.testActionableAnnouncementsSurviveStructuredFactsAndAreDeduplicated`
+和 `SubscriptionInteractionTests.testExpandedSubscriptionShowsDistinctAnnouncementsBeforeNodes`。
+
+同日的订阅展开列表与地图选中地区列表统一复用 `CompactNodeRow`：保留旗帜、节点名、
+协议副标题和测速结果，去掉每行的圆角底色与卡片间距，换成约 54pt 高的平铺行和
+细分隔线。未测试时不再显示「待测试」；测速进行中显示进度，完成后才直接显示延迟或
+不可达。节点不再提供第二层详情展开，右侧固定为 44pt 分享按钮，避免同一种节点行在
+地图和订阅里表现不同。自有节点仍使用原来的可展开详情样式。
+对应回归为 `SubscriptionInteractionTests.testMapAndSubscriptionReuseAStaticCompactNodeList`。
 
 ### 待修：UA 兜底重试会让机场少给节点（2026-08-12 记录）
 
@@ -736,6 +838,23 @@ xcodebuild -project Tower.xcodeproj \
 
 **已确认的事实**（不用重查）：肥羊的 `sub-web-modify` 前端没有任何规则集逻辑，只是选远程配置 URL 的 Vue 界面，逻辑全在 subconverter 后端。
 
+### 待修：Surge 节点证书校验失败与“跳过证书”（2026-08-25 反馈）
+
+TestFlight build 31 的反馈截图来自 Surge iOS 策略组测速。部分节点对
+`iosapps.itunes.apple.com`、`*.apple.com` 等 SNI 建立 TLS 连接时返回
+`NSOSStatusErrorDomain: -67901`，同时报告证书有效期过长、根不受信任、证书用途不匹配和
+主机名不匹配。这不是普通的延迟超时；当前仅凭截图也不能断定是塔台导出错误，因为同一份
+配置里仍有其他节点测试成功。
+
+处理前先拿一条失败节点，对比原订阅字段与塔台生成的 Surge 节点行，确认
+`skip-cert-verify` / `allowInsecure` 是否在解析和生成之间丢失。修复边界如下：
+
+- 原订阅明确要求跳过验证时，Surge 输出必须保留 `skip-cert-verify=true`；未声明时不能擅自补上。
+- 如增加手动覆盖，只允许按单个节点或单个订阅开启，默认关闭，并明确提示会失去服务器身份校验；禁止做成全局静默开关。
+- “跳过证书”只影响节点到代理服务器的 TLS 验证，不能改写策略组测速地址，也不能用于绕过目标网站的 HTTPS 校验。
+- VLESS + REALITY 等目标客户端无法忠实表达的节点继续按支持矩阵跳过并计数，不能靠关闭证书验证伪装成普通 TLS 节点。
+- 为 Surge 支持的每种 TLS 协议补生成器回归：原值为 `true` 时字段存在，原值为 `false` 时字段不存在；再用失败样本在真机 Surge 完成策略组测速和实际连通验收。
+
 ### P0：发布闭环
 
 1. 在至少一台 iOS 17+ 真机完成启动、订阅导入、平面点阵地图、测速、规则和导出主流程。
@@ -769,6 +888,16 @@ xcodebuild -project Tower.xcodeproj \
 - 收集不能识别的真实机场样本时，先脱敏密码、UUID、token 和域名。
 - 每修复一种格式都加入最小自动测试。
 - 对 HTTP 错误页、登录页和空订阅保持明确错误，不把它们解析成节点。
+
+### P2：兼容 iOS 16（暂不启动）
+
+> 2026-08-18 完成只读评估。当前最低系统为 iOS 17.0；实际按 iOS 16.0 编译时，首先被 Observation 状态管理和新版 Environment 注入阻塞，不能只修改 Deployment Target。
+
+- 推荐最低支持版本为 **iOS 16.0**；iOS 15 需要同时维护旧导航、分享和扫码实现，暂不纳入计划；不考虑 iOS 14 及以下。
+- 将 `AppModel` 从 iOS 17 的 `@Observable` / `@Environment(AppModel.self)` 迁移为可回溯到 iOS 16 的状态注入方式，并回归持久化、订阅刷新、规则选择和导出状态。
+- 为 `sensoryFeedback`、`ContentUnavailableView`、新版 `onChange`、滚动定位与内容过渡等 iOS 17 API 增加兼容实现；iOS 16.4 API 应移除或增加 iOS 16.0 回退。
+- 不支持 VisionKit 扫码的旧设备保留粘贴识别和手动添加入口，并显示明确提示，不阻塞订阅和节点导入。
+- 预计改造与回归共 **3–5 个工作日**。完成门槛包括 iOS 16 模拟器、当前系统 iPhone、iPad，以及至少一台真实 iOS 16 设备上的主流程验证。
 
 ### P2：WireGuard / Tailscale 客户端兼容研究
 
@@ -812,6 +941,20 @@ xcodebuild -project Tower.xcodeproj \
 - [ ] 安装客户端时一键打开；未安装时回退分享。
 - [ ] 本地临时 URL 只能从本机访问，并在约 45 秒后失效。
 
+### 2026-08-21 审查修复的真机项
+
+- [ ] 大订阅下首页地图滚动与地区展开不发涩（聚类由每帧 5 次降为 1 次）。
+- [ ] 节点筛选页边打字边搜索没有输入延迟（过滤由每帧 5 次降为 1 次）。
+- [ ] 下载过 Self-Configuration 后进出规则页不卡顿（下载规则列表现在有磁盘缓存）。
+- [ ] **刷新订阅后，此前取消勾选的节点仍是取消状态。** 机场改写 remark 时最容易复现；失效是静默的，节点会直接回到导出配置里。
+- [ ] 连续勾选多个节点时无掉帧；退到后台再回来，勾选状态已落盘（写入合并为 250 ms 一次，退后台强制 flush）。
+- [ ] iCloud 同步开关：开启、立即同步、关闭时的「关闭并删除 iCloud 副本 / 只关闭同步」两个分支都正确。
+- [ ] 离线改动后重启 App，本地修改不被 iCloud 上更旧的快照覆盖。
+- [ ] 添加订阅时点「取消」：面板关闭后不再出现「已添加」提示，订阅也没有被加入。
+- [ ] 批量粘贴多条订阅、其中一条不可达：可达的正常入库，失败的出现在失败报告里。
+- [ ] Toast 出现和消失都有动画（此前只有消失有）。
+- [ ] 仅节点模式（Shadowrocket / Loon / Quantumult X / Hiddify）导出内容与完整配置切换正常，互不串味。
+
 ### 恢复与隐私
 
 - [ ] 杀掉 App 后订阅和自有节点恢复。
@@ -842,6 +985,22 @@ xcodebuild -project Tower.xcodeproj \
 - 节点名称转义、去重和协议跳过正确。
 - 规则顺序与末尾兜底未改变。
 - 图标字段符合目标客户端语法，显示名称不重复 Emoji。
+
+界面文案有增删时另外运行：
+
+```sh
+bash Scripts/check_localization.sh
+```
+
+`LocalizationTests` 只校验「目录里已有的条目是否 15 种语言齐全」，看不到「源码有、目录没有」这一类缺口——它不会报错，只会让那句话在其余 14 种语言下显示中文。该脚本用 Xcode 自己的提取器比对，不要改回 grep 实现（见 §1.9）。
+
+发布脚本或标识符相关改动运行：
+
+```sh
+bash Scripts/tests/release_testflight_test.sh
+```
+
+它同时扫描「`git add -A` 会提交的一切」——已追踪文件和未被忽略的新文件——确认没有团队 ID、构建机地址或本机私密配置里的值混进去。只扫已追踪文件正是这类泄漏能进仓库的原因：新文件在 `git add` 之前对检查不可见。
 
 提交前执行 `git diff --check`，确认没有把 `.artifacts`、`.derived*`、证书、描述文件或 API Key 加入暂存区。
 

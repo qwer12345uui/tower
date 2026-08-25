@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Tower
 
 /// A client can support a protocol the user's licence does not cover — Surge
@@ -83,6 +84,74 @@ final class ProtocolFilterTests: XCTestCase {
     func testSingleCompatibleProtocolStillShowsTheFilter() {
         XCTAssertTrue(ProtocolFilterPolicy.isVisible(compatibleKindCount: 1))
         XCTAssertFalse(ProtocolFilterPolicy.isVisible(compatibleKindCount: 0))
+    }
+
+    /// Menus are UIKit menus underneath, and a menu item icon has to reduce to
+    /// a plain `Image`. Reading the source only proves the call is spelled
+    /// right, so the contract is asserted where it can actually fail: the two
+    /// menu call sites use `ProtocolMenuIcon`, and that view has a drawable
+    /// image for every protocol including the one with no SF Symbol.
+    func testMenuCallSitesUseAnIconAMenuCanRender() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let nodeFilter = try String(
+            contentsOf: projectRoot.appendingPathComponent("Tower/Features/Subscriptions/NodeFilterView.swift"),
+            encoding: .utf8
+        )
+        let addSource = try String(
+            contentsOf: projectRoot.appendingPathComponent("Tower/Features/Subscriptions/AddSourceSheet.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(
+            nodeFilter.contains("ProtocolMenuIcon(kind: option)"),
+            "协议筛选菜单里的图标必须是菜单能渲染的 Image"
+        )
+        XCTAssertTrue(
+            addSource.contains("ProtocolMenuIcon(kind: kind)"),
+            "手动添加节点的协议选择器同样是菜单"
+        )
+    }
+
+    @MainActor
+    func testEveryProtocolHasAnIconAMenuCanDraw() {
+        for kind in ProxyKind.allCases {
+            switch kind.iconDescriptor {
+            case .system(let name):
+                XCTAssertNotNil(UIImage(systemName: name), "\(kind.title) 的 SF Symbol 不存在")
+            case .trojanHorse:
+                let image = TrojanHorseImage.shared
+                XCTAssertGreaterThan(image.size.width, 0)
+                XCTAssertGreaterThan(image.size.height, 0)
+                XCTAssertEqual(
+                    image.renderingMode, .alwaysTemplate,
+                    "菜单图标要跟随菜单的着色"
+                )
+            }
+        }
+    }
+
+    func testProtocolIconsAvoidTheEquestrianAthlete() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for path in [
+            "Tower/Features/Subscriptions/NodeFilterView.swift",
+            "Tower/Features/Subscriptions/AddSourceSheet.swift",
+            "Tower/Features/Export/ExportView.swift",
+            "Tower/Features/Subscriptions/NodeMapOverview.swift",
+            "Tower/Features/Subscriptions/SharePayloadSheet.swift",
+        ] {
+            let source = try String(
+                contentsOf: projectRoot.appendingPathComponent(path),
+                encoding: .utf8
+            )
+            XCTAssertFalse(
+                source.contains("figure.equestrian.sports"),
+                "Trojan 不应再显示骑马人物：\(path)"
+            )
+        }
     }
 
     func testProtocolTheClientCannotWriteIsNotOffered() throws {

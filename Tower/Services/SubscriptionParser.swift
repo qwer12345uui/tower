@@ -49,10 +49,6 @@ struct SubscriptionService: SubscriptionFetching {
             throw SubscriptionError.invalidURL
         }
 
-        async let fallbackUsage: SubscriptionUsage? = {
-            guard let probe = Self.quotaProbe(for: url) else { return nil }
-            return try? await quota(at: probe, source: source)
-        }()
         var result = try await load(url, source: source)
 
         // The node list is authoritative for nodes; only the quota may be
@@ -61,15 +57,19 @@ struct SubscriptionService: SubscriptionFetching {
         // but its body is not used, because the panel's Clash converter drops
         // whatever it cannot express. One real airport returns 43 of its 55
         // nodes that way, silently losing every AnyTLS entry.
-        if result.usage?.hasPlanDetail != true {
-            if let usage = await fallbackUsage {
-                var merged = usage
-                merged.notices = result.usage?.notices ?? []
-                result.usage = merged
-            }
-        } else {
-            _ = await fallbackUsage
-        }
+        //
+        // This used to be an `async let` started before the main request, so
+        // every refresh put two requests on one airport panel simultaneously.
+        // That is precisely the burst the per-host refresh queue in AppModel
+        // exists to prevent, and precisely what a panel rate-limits. It now
+        // runs only when the list really carried no quota, and only after.
+        guard result.usage?.hasPlanDetail != true,
+              let probe = Self.quotaProbe(for: url),
+              let usage = try? await quota(at: probe, source: source) else { return result }
+
+        var merged = usage
+        merged.notices = result.usage?.notices ?? []
+        result.usage = merged
         return result
     }
 
@@ -291,8 +291,57 @@ protocol SubscriptionHTTPDataLoading {
     ) async throws -> (Data, URLResponse)
 }
 
+protocol SubscriptionURLSessionLoading {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+    func finishTasksAndInvalidate()
+}
+
+extension URLSession: SubscriptionURLSessionLoading {}
+
 struct SubscriptionHTTPClient: SubscriptionHTTPDataLoading {
     private static let gate = SubscriptionRequestGate()
+    private let sharedSession: any SubscriptionURLSessionLoading
+    private let isolatedSessionFactory: () -> any SubscriptionURLSessionLoading
+    private let dnsApplier: (URL) -> Void
+    private let dnsResetter: () -> Void
+
+    /// One ephemeral session shared by every subscription request.
+    ///
+    /// Building a session per request threw the connection away with it, so a
+    /// refresh of ten subscriptions paid for ten full TLS handshakes — more
+    /// once the compatibility retries ran. Ephemeral keeps the property that
+    /// actually mattered: nothing about these requests is written to disk.
+    /// Cookie handling is switched off outright rather than merely kept in
+    /// memory, so a provider cannot use one to correlate refreshes.
+    private static let session: URLSession = makeSession()
+
+    private static func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        return URLSession(configuration: configuration)
+    }
+
+    init() {
+        self.sharedSession = Self.session
+        self.isolatedSessionFactory = { Self.makeSession() }
+        self.dnsApplier = Self.applyDNSOverHTTPS
+        self.dnsResetter = Self.resetDNS
+    }
+
+    init(
+        sharedSession: any SubscriptionURLSessionLoading,
+        isolatedSessionFactory: @escaping () -> any SubscriptionURLSessionLoading,
+        applyDNSOverHTTPS: @escaping (URL) -> Void,
+        resetDNS: @escaping () -> Void
+    ) {
+        self.sharedSession = sharedSession
+        self.isolatedSessionFactory = isolatedSessionFactory
+        self.dnsApplier = applyDNSOverHTTPS
+        self.dnsResetter = resetDNS
+    }
 
     func data(
         for request: URLRequest,
@@ -300,25 +349,52 @@ struct SubscriptionHTTPClient: SubscriptionHTTPDataLoading {
     ) async throws -> (Data, URLResponse) {
         let needsExclusiveAccess = dnsOverHTTPSURL != nil
         await Self.gate.acquire(needsExclusiveAccess: needsExclusiveAccess)
-        if let dnsOverHTTPSURL { applyDNSOverHTTPS(dnsOverHTTPSURL) }
+        let session: any SubscriptionURLSessionLoading
+        if let dnsOverHTTPSURL {
+            dnsApplier(dnsOverHTTPSURL)
+            // URLSession pools persistent connections. A shared session may
+            // therefore reuse a socket opened before the custom resolver was
+            // installed and skip DNS entirely. A request-scoped session starts
+            // with an empty pool, then is invalidated before the resolver is
+            // restored so no connection can escape this DNS window.
+            session = isolatedSessionFactory()
+        } else {
+            session = sharedSession
+        }
 
         do {
-            let configuration = URLSessionConfiguration.ephemeral
-            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let session = URLSession(configuration: configuration)
             let result = try await session.data(for: request)
-            session.finishTasksAndInvalidate()
-            if dnsOverHTTPSURL != nil { resetDNS() }
+            if dnsOverHTTPSURL != nil {
+                session.finishTasksAndInvalidate()
+                dnsResetter()
+            }
             await Self.gate.release(wasExclusiveAccess: needsExclusiveAccess)
             return result
         } catch {
-            if dnsOverHTTPSURL != nil { resetDNS() }
+            if dnsOverHTTPSURL != nil {
+                session.finishTasksAndInvalidate()
+                dnsResetter()
+            }
             await Self.gate.release(wasExclusiveAccess: needsExclusiveAccess)
             throw error
         }
     }
 
-    private func applyDNSOverHTTPS(_ url: URL) {
+    /// Switches the process-wide resolver to the user's encrypted one.
+    ///
+    /// This is deliberately not scoped to the request, because it cannot be:
+    /// an encrypted resolver is configured on an `NWParameters.PrivacyContext`,
+    /// and URLSession offers no way to attach one. Only a hand-written
+    /// NWConnection client could — which would mean reimplementing TLS
+    /// handling, redirects and chunked transfer to gain it.
+    ///
+    /// `SubscriptionRequestGate` therefore serialises subscription requests
+    /// around the window, but it cannot cover the rest of the app: a rule
+    /// download, a latency probe or a country lookup running at the same moment
+    /// also resolves through this resolver. The window is a single request long
+    /// and the setting is restored in both the success and failure paths, so
+    /// the exposure is bounded rather than eliminated.
+    private static func applyDNSOverHTTPS(_ url: URL) {
         let context = NWParameters.PrivacyContext.default
         context.requireEncryptedNameResolution(
             true,
@@ -327,7 +403,7 @@ struct SubscriptionHTTPClient: SubscriptionHTTPDataLoading {
         context.flushCache()
     }
 
-    private func resetDNS() {
+    private static func resetDNS() {
         let context = NWParameters.PrivacyContext.default
         context.requireEncryptedNameResolution(
             false,
@@ -396,7 +472,8 @@ struct SubscriptionParser {
 
         if text.contains("proxies:") {
             let parsed = parseClashYAML(text, sourceID: sourceID)
-            let marked = parsed.nodes.map(markingSubscriptionMetadata)
+            let marked = restoringAmbiguousRegionalNames(parsed.nodes)
+                .map(markingSubscriptionMetadata)
             let notices = marked.filter { $0.isSubscriptionMetadata == true }.map(\.name)
             return .init(
                 nodes: deduplicated(marked),
@@ -432,7 +509,8 @@ struct SubscriptionParser {
                 rejected += 1
             }
         }
-        let marked = nodes.map(markingSubscriptionMetadata)
+        let marked = restoringAmbiguousRegionalNames(nodes)
+            .map(markingSubscriptionMetadata)
         let notices = marked.filter { $0.isSubscriptionMetadata == true }.map(\.name)
         return .init(
             nodes: deduplicated(marked),
@@ -869,6 +947,12 @@ struct SubscriptionParser {
         let uuid: String
         if rawUUID.lowercased().hasPrefix("auto:") {
             uuid = String(rawUUID.dropFirst("auto:".count))
+        } else if rawUUID.lowercased().hasPrefix("none:") {
+            // Shadowrocket may preserve VLESS's `encryption=none` marker in
+            // its Base64 authority as `none:uuid@host:port`. It is not part of
+            // the UUID; retaining it makes an otherwise valid node impossible
+            // to export to every target client.
+            uuid = String(rawUUID.dropFirst("none:".count))
         } else if rawUUID.hasPrefix(":") {
             uuid = String(rawUUID.dropFirst())
         } else {
@@ -888,7 +972,7 @@ struct SubscriptionParser {
         let transport = normalizedTransport(rawTransport)
         let flow = query["flow"]?.removingPercentEncoding
             ?? (query["xtls"] == "2" ? "xtls-rprx-vision" : nil)
-        let name = query["remarks"]?.removingPercentEncoding ?? fragmentName
+        let name = proxyNameQueryValue(query) ?? fragmentName
 
         return ProxyNode(
             sourceID: sourceID,
@@ -1366,6 +1450,12 @@ struct SubscriptionParser {
     }
 
     private func parseInlineYAMLMap(_ value: String) -> [String: String] {
+        // Sub-Store's Shadowrocket producer writes each proxy as a JSON object
+        // under `proxies:`. JSON is valid inline YAML, but its quoted keys and
+        // escaped strings must be decoded as JSON first: the small YAML reader
+        // below deliberately does not implement JSON string escaping.
+        if let json = parseInlineJSONMap(value) { return json }
+
         let body = value.trimmingCharacters(in: CharacterSet(charactersIn: "{} "))
         var pieces: [String] = []
         var current = ""
@@ -1388,6 +1478,27 @@ struct SubscriptionParser {
         }
         if !current.isEmpty { pieces.append(current) }
         return Dictionary(pieces.compactMap(parseYAMLPair)) { _, new in new }
+    }
+
+    private func parseInlineJSONMap(_ value: String) -> [String: String]? {
+        guard let data = value.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any] else { return nil }
+
+        return dictionary.reduce(into: [:]) { result, entry in
+            guard let value = inlineJSONValue(entry.value) else { return }
+            result[entry.key.lowercased()] = value
+        }
+    }
+
+    private func inlineJSONValue(_ value: Any) -> String? {
+        if let string = value as? String { return string }
+        if value is NSNull { return nil }
+        if let number = value as? NSNumber { return number.stringValue }
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else { return nil }
+        return string
     }
 
     /// Inline Clash proxies can contain nested inline maps, for example
@@ -1730,6 +1841,71 @@ struct SubscriptionParser {
                 : node.canonicalKey
             return seen.insert(key).inserted
         }
+    }
+
+    /// Some subscription edges return only a flag as the remark even though
+    /// another edge returns the full regional name. Two `🇭🇰` entries are
+    /// impossible to distinguish in policy groups and exported profiles, so
+    /// recover the provider's numeric hint from hosts such as `hk2` / `hk3`.
+    /// A stable sequence is used only when that hint is absent. Provider names
+    /// containing any real text are never rewritten.
+    private func restoringAmbiguousRegionalNames(_ nodes: [ProxyNode]) -> [ProxyNode] {
+        var indexesByCountryCode: [String: [Int]] = [:]
+        for (index, node) in nodes.enumerated() {
+            guard let code = bareFlagCountryCode(in: node.name) else { continue }
+            indexesByCountryCode[code, default: []].append(index)
+        }
+
+        var restored = nodes
+        for (code, indexes) in indexesByCountryCode where indexes.count > 1 {
+            guard let region = NodeRegionResolver.region(countryCode: code) else { continue }
+            var usedSuffixes = Set<Int>()
+            var nextFallback = 1
+
+            for index in indexes {
+                let hinted = regionalNumberHint(in: nodes[index].server, countryCode: code)
+                let number: Int
+                if let hinted, usedSuffixes.insert(hinted).inserted {
+                    number = hinted
+                } else {
+                    while usedSuffixes.contains(nextFallback) { nextFallback += 1 }
+                    number = nextFallback
+                    usedSuffixes.insert(number)
+                    nextFallback += 1
+                }
+                restored[index].name = "\(region.flag) \(region.name)\(String(format: "%02d", number))"
+            }
+        }
+        return restored
+    }
+
+    private func bareFlagCountryCode(in name: String) -> String? {
+        guard let code = NodeRegionResolver.flaggedCountryCode(in: name) else { return nil }
+        let remainder = name.unicodeScalars
+            .filter { !(0x1F1E6...0x1F1FF).contains(Int($0.value)) }
+            .map(String.init)
+            .joined()
+            .trimmingCharacters(
+                in: CharacterSet.whitespacesAndNewlines.union(
+                    CharacterSet(charactersIn: "-_|·•")
+                )
+            )
+        return remainder.isEmpty ? code : nil
+    }
+
+    private func regionalNumberHint(in server: String, countryCode: String) -> Int? {
+        let code = countryCode.lowercased()
+        let tokens = server.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        for token in tokens where token.hasPrefix(code) {
+            let digits = token.dropFirst(code.count)
+            guard !digits.isEmpty, digits.count <= 3,
+                  digits.allSatisfy(\.isNumber),
+                  let number = Int(digits), number > 0 else { continue }
+            return number
+        }
+        return nil
     }
 
     private func markingSubscriptionMetadata(_ node: ProxyNode) -> ProxyNode {
