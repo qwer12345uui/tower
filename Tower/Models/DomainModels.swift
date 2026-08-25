@@ -164,25 +164,61 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
     /// when the structured data already covers that exact fact; a reset
     /// countdown survives an expiry date because they are different dates.
     var distinctNotices: [String] {
-        notices.filter { notice in
+        var seen = Set<String>()
+        return notices.compactMap { rawNotice in
+            let notice = rawNotice.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !notice.isEmpty else { return nil }
             let text = notice.lowercased()
-            if totalBytes != nil, Self.trafficWords.contains(where: text.contains) { return false }
-            if expiresAt != nil, Self.expiryWords.contains(where: text.contains) { return false }
-            return true
+            let isActionableAnnouncement = Self.actionableAnnouncementWords.contains(where: text.contains)
+            if !isActionableAnnouncement {
+                if totalBytes != nil, Self.trafficWords.contains(where: text.contains) { return nil }
+                if expiresAt != nil, Self.expiryWords.contains(where: text.contains) { return nil }
+            }
+
+            // Providers sometimes repeat the same metadata node more than
+            // once. Keep the first spelling and order so the announcement
+            // reads exactly as the provider wrote it without showing twice.
+            guard seen.insert(text).inserted else { return nil }
+            return notice
         }
     }
 
     private static let trafficWords = ["流量", "traffic", "余额", "balance", "↑:", "↓:", "tot:"]
     private static let expiryWords = ["到期", "过期", "有效期至", "expire"]
+    private static let actionableAnnouncementWords = [
+        "公告", "通知", "提醒", "重置", "续费", "客服", "官网", "网址", "联系",
+        "announcement", "notice", "reminder", "reset", "renew", "support", "website", "contact"
+    ]
 
     var usedBytes: Int64? {
         guard uploadBytes != nil || downloadBytes != nil else { return nil }
-        return (uploadBytes ?? 0) + (downloadBytes ?? 0)
+        // Saturating: two clamped halves would otherwise overflow their sum,
+        // which traps exactly like the conversion this guards against.
+        let (sum, overflowed) = (uploadBytes ?? 0).addingReportingOverflow(downloadBytes ?? 0)
+        return overflowed ? .max : sum
     }
 
     var remainingBytes: Int64? {
         guard let totalBytes, let usedBytes else { return nil }
         return max(totalBytes - usedBytes, 0)
+    }
+
+    /// Remaining quota suitable for the subscription card.
+    ///
+    /// Prefer the standardized response header. Some providers only expose the
+    /// same fact in a metadata row such as `剩余流量：101.69 GB`; recover that
+    /// value so hiding the fake node does not hide the useful plan data too.
+    var displayRemainingBytes: Int64? {
+        remainingBytes ?? notices.lazy.compactMap(Self.remainingBytes(in:)).first
+    }
+
+    /// Expiry suitable for a calendar-day countdown on the subscription card.
+    /// The caller supplies its calendar so a provider's date-only notice is
+    /// interpreted in the same time zone used to calculate the remaining days.
+    func displayExpiresAt(calendar: Calendar) -> Date? {
+        expiresAt ?? notices.lazy.compactMap {
+            Self.expiryDate(in: $0, calendar: calendar)
+        }.first
     }
 
     /// 0…1 for a progress bar, nil when the airport gave no total.
@@ -208,9 +244,9 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
             guard let value = Double(raw) else { continue }
 
             switch key {
-            case "upload": usage.uploadBytes = Int64(value); matched = true
-            case "download": usage.downloadBytes = Int64(value); matched = true
-            case "total": usage.totalBytes = Int64(value); matched = true
+            case "upload": usage.uploadBytes = clampedBytes(value); matched = true
+            case "download": usage.downloadBytes = clampedBytes(value); matched = true
+            case "total": usage.totalBytes = clampedBytes(value); matched = true
             case "expire":
                 // A zero expiry means "never", not 1970.
                 if value > 0 { usage.expiresAt = Date(timeIntervalSince1970: value) }
@@ -243,6 +279,21 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
 
     static let statusPrefix = "STATUS="
 
+    /// Every byte count here comes from the provider — a response header, a
+    /// `STATUS=` line, or a remark the airport wrote. `Int64(someDouble)`
+    /// *traps* once the value passes `Int64.max`, so a header as ordinary as
+    /// `total=99999999999999999999` crashed Tower on refresh, and a notice
+    /// reading `剩余流量：1e30 GB` crashed it again while drawing the card.
+    /// Saturating instead keeps a nonsensical quota a display problem.
+    private static func clampedBytes(_ value: Double) -> Int64? {
+        guard value.isFinite else { return nil }
+        // A byte count is never negative, and clamping the low end to zero
+        // rather than `Int64.min` keeps the arithmetic below overflow-free too.
+        if value <= 0 { return 0 }
+        if value >= Double(Int64.max) { return .max }
+        return Int64(value)
+    }
+
     private static let unitMultipliers: [String: Double] = [
         "": 1, "b": 1,
         "k": 1024, "kb": 1024,
@@ -250,6 +301,56 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
         "g": 1_073_741_824, "gb": 1_073_741_824,
         "t": 1_099_511_627_776, "tb": 1_099_511_627_776
     ]
+
+    private static let byteCountPattern = try? NSRegularExpression(
+        pattern: #"([0-9]+(?:\.[0-9]+)?)\s*([kmgt]?b)"#,
+        options: [.caseInsensitive]
+    )
+    private static let expiryDatePattern = try? NSRegularExpression(
+        pattern: #"\b([0-9]{4})[-/.]([0-9]{1,2})[-/.]([0-9]{1,2})\b"#
+    )
+    private static let remainingTrafficMarkers = [
+        "剩余流量", "剩余流量余额", "remaining traffic", "traffic remaining",
+        "remaining data", "data remaining"
+    ]
+    private static let expiryMarkers = [
+        "套餐到期", "到期时间", "过期时间", "有效期至",
+        "expires", "expire", "expiration"
+    ]
+
+    private static func remainingBytes(in notice: String) -> Int64? {
+        let text = notice.lowercased()
+        guard let markerRange = remainingTrafficMarkers.lazy.compactMap({
+            text.range(of: $0)
+        }).first,
+        let byteCountPattern else { return nil }
+
+        let tail = String(text[markerRange.upperBound...])
+        let range = NSRange(tail.startIndex..<tail.endIndex, in: tail)
+        guard let match = byteCountPattern.firstMatch(in: tail, range: range),
+              let valueRange = Range(match.range(at: 1), in: tail),
+              let unitRange = Range(match.range(at: 2), in: tail),
+              let value = Double(tail[valueRange]),
+              let multiplier = unitMultipliers[String(tail[unitRange]).lowercased()] else {
+            return nil
+        }
+        return clampedBytes(value * multiplier)
+    }
+
+    private static func expiryDate(in notice: String, calendar: Calendar) -> Date? {
+        let text = notice.lowercased()
+        guard expiryMarkers.contains(where: text.contains),
+              let expiryDatePattern else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = expiryDatePattern.firstMatch(in: text, range: range),
+              let yearRange = Range(match.range(at: 1), in: text),
+              let monthRange = Range(match.range(at: 2), in: text),
+              let dayRange = Range(match.range(at: 3), in: text),
+              let year = Int(text[yearRange]),
+              let month = Int(text[monthRange]),
+              let day = Int(text[dayRange]) else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
+    }
 
     /// Reads `20.02GB` out of whatever follows `marker`.
     private static func bytes(after marker: String, in text: String) -> Int64? {
@@ -271,7 +372,7 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
         guard let value = Double(digits), let multiplier = unitMultipliers[unit.lowercased()] else {
             return nil
         }
-        return Int64(value * multiplier)
+        return clampedBytes(value * multiplier)
     }
 
     private static func day(after marker: String, in text: String) -> Date? {
@@ -281,6 +382,19 @@ struct SubscriptionUsage: Codable, Hashable, Sendable {
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: String(text[range.upperBound...].prefix(10)))
+    }
+}
+
+enum ProxyIconDescriptor: Equatable, Sendable {
+    case system(String)
+    case trojanHorse
+
+    /// A system-only fallback for APIs that cannot host a custom SwiftUI view.
+    var systemFallback: String {
+        switch self {
+        case .system(let name): name
+        case .trojanHorse: "shippingbox.fill"
+        }
     }
 }
 
@@ -321,26 +435,36 @@ enum ProxyKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var symbol: String {
+    var iconDescriptor: ProxyIconDescriptor {
         switch self {
-        case .shadowsocks, .shadowsocksR: "bolt.horizontal.circle.fill"
-        case .vmess, .vless: "point.3.filled.connected.trianglepath.dotted"
-        case .trojan: "shield.lefthalf.filled"
-        case .hysteria, .hysteria2: "hare.fill"
+        // Shadowsocks clients have long used a paper plane as the familiar
+        // proxy metaphor. Keep SSR in the same family, but give it a circular
+        // enclosure so the two remain distinguishable in a mixed list.
+        case .shadowsocks: .system("paperplane.fill")
+        case .shadowsocksR: .system("paperplane.circle.fill")
+        case .vmess: .system("point.3.filled.connected.trianglepath.dotted")
+        case .vless: .system("v.circle.fill")
+        // There is no Trojan-horse SF Symbol. A dedicated, tintable wooden
+        // horse glyph avoids substituting an unrelated equestrian athlete.
+        case .trojan: .trojanHorse
+        case .hysteria, .hysteria2: .system("hare.fill")
         // TUIC is the low-latency QUIC option. Keep it distinct from the
         // Shadowsocks bolt while matching the filled, circular protocol icons
         // used by the export filter.
-        case .tuic: "bolt.circle.fill"
-        case .wireguard: "shield.checkered"
-        case .anytls: "lock.shield.fill"
+        case .tuic: .system("bolt.circle.fill")
+        case .wireguard: .system("shield.checkered")
+        case .anytls: .system("lock.shield.fill")
         // Snell is Surge's own protocol, so this echoes the rounded-square app
         // icon it ships under, with an S for the name. Not Surge's actual mark:
         // that is their trademark and this repository is public and MIT.
-        case .snell: "s.square.fill"
-        case .socks5, .http: "network"
-        case .unknown: "questionmark.circle.fill"
+        case .snell: .system("s.square.fill")
+        case .socks5: .system("5.circle.fill")
+        case .http: .system("globe")
+        case .unknown: .system("questionmark.circle.fill")
         }
     }
+
+    var symbol: String { iconDescriptor.systemFallback }
 }
 
 struct ProxyNode: Identifiable, Codable, Hashable {
@@ -885,6 +1009,8 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
     case quanx
     case hiddify
     case egern
+    case v2box
+    case clashApple = "clash-apple"
 
     var id: String { rawValue }
 
@@ -892,11 +1018,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: "Surge"
         case .clash: "Stash"
+        case .clashApple: "Clash"
         case .shadowrocket: "Shadowrocket"
         case .loon: "Loon"
         case .quanx: "QuanX"
         case .hiddify: "Hiddify"
         case .egern: "Egern"
+        case .v2box: "V2Box"
         }
     }
 
@@ -904,11 +1032,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: String(localized: "完整配置")
         case .clash: "Clash YAML"
+        case .clashApple: "Clash / mihomo"
         case .shadowrocket: String(localized: "本地配置")
         case .loon: String(localized: "完整配置")
         case .quanx: "Quantumult X"
         case .hiddify: String(localized: "sing-box 内核")
         case .egern: "Egern YAML"
+        case .v2box: "V2Ray / Xray"
         }
     }
 
@@ -916,11 +1046,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: "wave.3.right.circle.fill"
         case .clash: "square.3.layers.3d.top.filled"
+        case .clashApple: "point.3.connected.trianglepath.dotted"
         case .shadowrocket: "paperplane.circle.fill"
         case .loon: "moon.stars.circle.fill"
         case .quanx: "q.circle.fill"
         case .hiddify: "eye.slash.circle.fill"
         case .egern: "e.circle.fill"
+        case .v2box: "shippingbox.circle.fill"
         }
     }
 
@@ -930,11 +1062,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: "ClientSurge"
         case .clash: "ClientStash"
+        case .clashApple: "ClientClashOfficial"
         case .shadowrocket: "ClientShadowrocket"
         case .loon: "ClientLoon"
         case .quanx: "ClientQuantumultX"
         case .hiddify: "ClientHiddify"
         case .egern: "ClientEgern"
+        case .v2box: "ClientV2Box"
         }
     }
 
@@ -942,11 +1076,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: "waveform.path.ecg"
         case .clash: "square.3.layers.3d.top.filled"
+        case .clashApple: "point.3.connected.trianglepath.dotted"
         case .shadowrocket: "paperplane.fill"
         case .loon: "moon.stars.fill"
         case .quanx: "q.circle.fill"
         case .hiddify: "shield.lefthalf.filled"
         case .egern: "e.circle.fill"
+        case .v2box: "shippingbox.fill"
         }
     }
 
@@ -954,11 +1090,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .surge: "3157D5"
         case .clash: "1473E6"
+        case .clashApple: "2F82F7"
         case .shadowrocket: "1B98F5"
         case .loon: "6B45D8"
         case .quanx: "14A69A"
         case .hiddify: "6047D9"
         case .egern: "F08A2B"
+        case .v2box: "246BFD"
         }
     }
 
@@ -981,39 +1119,42 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
 
     var fileExtension: String {
         switch self {
-        case .clash, .egern: "yaml"
+        case .clash, .clashApple, .egern: "yaml"
         case .hiddify: "json"
+        case .v2box: "txt"
         default: "conf"
         }
     }
 
     var supportsDirectConfigurationImport: Bool {
-        // Quantumult X is the only one left without an install scheme.
+        // Quantumult X has no public full-profile install scheme. V2Box
+        // publishes only a node-subscription route, not a complete profile
+        // schema with Tower's rules and policy groups.
         switch self {
-        case .quanx: false
+        case .quanx, .v2box: false
         default: true
         }
     }
 
     var supportsNodesOnlyImport: Bool {
-        [.shadowrocket, .loon, .quanx, .hiddify].contains(self)
+        [.shadowrocket, .loon, .quanx, .hiddify, .v2box].contains(self)
     }
 
     func supportsDirectImport(mode: ExportContentMode) -> Bool {
         switch mode {
         case .fullConfiguration: supportsDirectConfigurationImport
         case .nodesOnly: supportsNodesOnlyImport
-        // Quantumult X has remote node and filter resources, but policy groups
-        // only exist in the full configuration's [policy] section. A filter
-        // resource alone can therefore reference policy names that do not
-        // exist, so Tower never presents it as a complete import operation.
-        case .rulesOnly: false
         }
     }
 
     var supportedContentModes: [ExportContentMode] {
+        if self == .v2box { return [.nodesOnly] }
         guard supportsNodesOnlyImport else { return [.fullConfiguration] }
         return [.fullConfiguration, .nodesOnly]
+    }
+
+    var supportsFullConfigurationExport: Bool {
+        supportedContentModes.contains(.fullConfiguration)
     }
 
     var primaryImportTitle: String {
@@ -1024,7 +1165,7 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
 
     func supports(_ kind: ProxyKind) -> Bool {
         switch self {
-        case .clash:
+        case .clash, .clashApple:
             kind != .unknown
         case .surge:
             // TUIC but no Hysteria 1: Surge writes `tuic-v5` and has never
@@ -1050,6 +1191,13 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
         case .egern:
             // Egern's own producer lists tuic but no hysteria 1.
             [.shadowsocks, .vmess, .vless, .trojan, .hysteria2, .tuic, .wireguard, .anytls, .snell, .socks5, .http].contains(kind)
+        case .v2box:
+            // V2Box's native protocol picker also exposes WireGuard,
+            // Hysteria 2 and HTTP. Tower can preserve each of those as a
+            // canonical subscription URI, while JSON/SSH/PING are not Tower
+            // proxy protocol models and stay out of this capability matrix.
+            [.shadowsocks, .vmess, .vless, .trojan, .wireguard, .hysteria2, .socks5, .http]
+                .contains(kind)
         }
     }
 }
@@ -1057,7 +1205,6 @@ enum ClientTarget: String, CaseIterable, Identifiable, Codable {
 enum ExportContentMode: String, CaseIterable, Codable, Identifiable {
     case fullConfiguration
     case nodesOnly
-    case rulesOnly
 
     var id: String { rawValue }
 
@@ -1065,21 +1212,31 @@ enum ExportContentMode: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .fullConfiguration: String(localized: "完整配置")
         case .nodesOnly: String(localized: "仅节点")
-        // Kept for decoding older snapshots. No current client exposes this
-        // mode because a remote rule resource cannot carry its policy groups.
-        case .rulesOnly: String(localized: "本地规则")
         }
     }
 }
 
 enum ClientTargetOrder {
     static func normalized(rawValues: [String]?) -> [ClientTarget] {
+        guard let rawValues, !rawValues.isEmpty else {
+            return ClientTarget.allCases
+        }
         var seen = Set<ClientTarget>()
         var result: [ClientTarget] = []
 
-        for rawValue in rawValues ?? [] {
+        for rawValue in rawValues {
             guard let target = ClientTarget(rawValue: rawValue), seen.insert(target).inserted else { continue }
             result.append(target)
+        }
+
+        // The first standalone Clash build placed it directly after Stash.
+        // Migrate that former default to the new trailing position, while
+        // leaving an explicitly customised position untouched.
+        if let clashIndex = result.firstIndex(of: .clashApple),
+           let stashIndex = result.firstIndex(of: .clash),
+           clashIndex == result.index(after: stashIndex) {
+            result.remove(at: clashIndex)
+            result.append(.clashApple)
         }
         for target in ClientTarget.allCases where seen.insert(target).inserted {
             result.append(target)
@@ -1100,6 +1257,9 @@ struct AppSnapshot: Codable {
     /// Explicitly enabled service-rule groups per scheme. A missing scheme key
     /// keeps the upstream/default behavior of enabling every group.
     var selectedRuleGroups: [String: [String]]?
+    /// User-owned policy-group order and candidate overrides. Optional keeps
+    /// snapshots from before unified rule customization decodable.
+    var ruleSchemeCustomizations: [String: RuleSchemeCustomization]?
     /// Whether imported policy-group names keep their decorative leading emoji,
     /// keyed by scheme id. Missing entries preserve the source appearance.
     var ruleGroupEmojisEnabled: [String: Bool]?
@@ -1109,6 +1269,9 @@ struct AppSnapshot: Codable {
     /// User-authored rules live outside downloaded schemes so upstream refresh
     /// can never overwrite them.
     var customRuleFlows: [CustomRuleFlow]?
+    /// Rulesets authored or saved by the user. Membership in an active scheme
+    /// remains in `customRuleFlows`, so creating one does not enable it.
+    var localRuleSets: [LocalRuleSet]?
     /// Protocols the user chose not to write, keyed by client raw value. Stored
     /// as plain strings because a dictionary with a non-String key encodes as a
     /// flat array, which is awkward to read in state.json.
@@ -1139,6 +1302,15 @@ struct AppSnapshot: Codable {
     var updatedAt: Date?
     /// Per-client import mode. New or unsupported clients fall back to full.
     var exportContentModes: [String: String]?
+    /// Country codes already resolved from the offline IP database, keyed by
+    /// node host rather than by node id: ids are regenerated by every parse,
+    /// while the host is what actually decided the answer. Without this a cold
+    /// launch re-runs `getaddrinfo` for every node whose name says nothing
+    /// about where it is. Optional like every other later addition. The
+    /// companion timestamps keep DNS changes from pinning a hostname to one
+    /// country forever.
+    var resolvedHostCountryCodes: [String: String]?
+    var resolvedHostCountryCodeUpdatedAt: [String: Date]?
 
     init(
         subscriptions: [SubscriptionSource],
@@ -1147,9 +1319,11 @@ struct AppSnapshot: Codable {
         selectedTarget: ClientTarget,
         importedSchemes: [RuleScheme]? = nil,
         selectedRuleGroups: [String: [String]]? = nil,
+        ruleSchemeCustomizations: [String: RuleSchemeCustomization]? = nil,
         ruleGroupEmojisEnabled: [String: Bool]? = nil,
         excludedNodeIDs: [UUID]? = nil,
         customRuleFlows: [CustomRuleFlow]? = nil,
+        localRuleSets: [LocalRuleSet]? = nil,
         excludedKinds: [String: [String]]? = nil,
         renewalRemindersEnabled: Bool? = nil,
         clientOrder: [String]? = nil,
@@ -1160,6 +1334,8 @@ struct AppSnapshot: Codable {
         preferRuleSets: Bool? = nil,
         preferRuleSetsWasExplicitlySet: Bool? = nil,
         exportContentModes: [String: String]? = nil,
+        resolvedHostCountryCodes: [String: String]? = nil,
+        resolvedHostCountryCodeUpdatedAt: [String: Date]? = nil,
         updatedAt: Date? = nil
     ) {
         self.subscriptions = subscriptions
@@ -1168,9 +1344,11 @@ struct AppSnapshot: Codable {
         self.selectedTarget = selectedTarget
         self.importedSchemes = importedSchemes
         self.selectedRuleGroups = selectedRuleGroups
+        self.ruleSchemeCustomizations = ruleSchemeCustomizations
         self.ruleGroupEmojisEnabled = ruleGroupEmojisEnabled
         self.excludedNodeIDs = excludedNodeIDs
         self.customRuleFlows = customRuleFlows
+        self.localRuleSets = localRuleSets
         self.excludedKinds = excludedKinds
         self.renewalRemindersEnabled = renewalRemindersEnabled
         self.clientOrder = clientOrder
@@ -1181,6 +1359,8 @@ struct AppSnapshot: Codable {
         self.preferRuleSets = preferRuleSets
         self.preferRuleSetsWasExplicitlySet = preferRuleSetsWasExplicitlySet
         self.exportContentModes = exportContentModes
+        self.resolvedHostCountryCodes = resolvedHostCountryCodes
+        self.resolvedHostCountryCodeUpdatedAt = resolvedHostCountryCodeUpdatedAt
         self.updatedAt = updatedAt
     }
 }

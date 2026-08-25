@@ -33,6 +33,92 @@ final class ExportPresentationTests: XCTestCase {
         XCTAssertTrue(textView.textContainer.widthTracksTextView)
     }
 
+    func testQuanXPreviewUsesSectionSpecificSyntaxColors() throws {
+        let content = """
+        # Generated locally by 塔台
+        [general]
+        server_check_url = http://www.gstatic.com/generate_204
+        [dns]
+        no-system
+        server = 1.1.1.1
+        [policy]
+        static=🚀 节点选择, direct
+        """
+
+        let spans = ConfigurationSyntaxHighlighter.spans(in: content)
+
+        XCTAssertEqual(style(at: "# Generated locally by 塔台", in: content, spans: spans), .comment)
+        XCTAssertEqual(style(at: "[general]", in: content, spans: spans), .section(.blue))
+        XCTAssertEqual(style(at: "server_check_url", in: content, spans: spans), .key(.blue))
+        XCTAssertEqual(style(at: "http://www.gstatic.com/generate_204", in: content, spans: spans), .url)
+        XCTAssertEqual(style(at: "[dns]", in: content, spans: spans), .section(.purple))
+        XCTAssertEqual(style(at: "no-system", in: content, spans: spans), .directive(.purple))
+        XCTAssertEqual(style(at: "[policy]", in: content, spans: spans), .section(.teal))
+        XCTAssertEqual(style(at: "static=", in: content, spans: spans), .key(.teal))
+    }
+
+    func testYAMLPreviewCarriesSemanticColorIntoNestedKeys() {
+        let content = """
+        proxies:
+          - name: "Tokyo 01"
+            port: 443
+        rules:
+          - DOMAIN-SUFFIX,example.com,🚀 节点选择
+        """
+
+        let spans = ConfigurationSyntaxHighlighter.spans(in: content)
+
+        XCTAssertEqual(style(at: "proxies", in: content, spans: spans), .key(.teal))
+        XCTAssertEqual(style(at: "name", in: content, spans: spans), .key(.teal))
+        XCTAssertEqual(style(at: "\"Tokyo 01\"", in: content, spans: spans), .string)
+        XCTAssertEqual(style(at: "443", in: content, spans: spans), .number)
+        XCTAssertEqual(style(at: "rules", in: content, spans: spans), .key(.orange))
+        XCTAssertEqual(style(at: "DOMAIN-SUFFIX", in: content, spans: spans), .directive(.orange))
+    }
+
+    @MainActor
+    func testHighlightedConfigurationPreservesOriginalTextAndUsesDistinctColors() throws {
+        let content = "# note\n[general]\ntimeout = 5000"
+        let attributed = ConfigurationSyntaxHighlighter.attributedString(
+            for: content,
+            baseFont: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        )
+
+        XCTAssertEqual(attributed.string, content)
+        let commentRange = try XCTUnwrap((content as NSString).range(of: "# note").nonEmpty)
+        let sectionRange = try XCTUnwrap((content as NSString).range(of: "[general]").nonEmpty)
+        let commentColor = attributed.attribute(.foregroundColor, at: commentRange.location, effectiveRange: nil)
+            as? UIColor
+        let sectionColor = attributed.attribute(.foregroundColor, at: sectionRange.location, effectiveRange: nil)
+            as? UIColor
+
+        XCTAssertNotNil(commentColor)
+        XCTAssertNotNil(sectionColor)
+        XCTAssertNotEqual(commentColor, sectionColor)
+    }
+
+    @MainActor
+    func testConfigurationTextViewAppliesHighlightingWithoutLosingSelection() throws {
+        let textView = ConfigurationTextViewFactory.make()
+        let content = "# note\n[general]\ntimeout = 5000"
+        let expectedFont = UIFontMetrics(forTextStyle: .body).scaledFont(
+            for: UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        )
+
+        ConfigurationTextViewFactory.render(content, in: textView)
+
+        XCTAssertEqual(textView.text, content)
+        XCTAssertGreaterThan(textView.attributedText.length, 0)
+        XCTAssertTrue(textView.isSelectable)
+        XCTAssertEqual(
+            try XCTUnwrap(textView.font).pointSize,
+            expectedFont.pointSize,
+            accuracy: 0.01,
+            "The preview should respect the current Dynamic Type category, including smaller text sizes."
+        )
+        XCTAssertGreaterThanOrEqual(textView.textContainerInset.left, 14)
+    }
+
     func testEveryClientTargetUsesBundledOfficialAppIcon() {
         for target in ClientTarget.allCases {
             let asset = try? XCTUnwrap(target.appIconAssetName)
@@ -48,6 +134,39 @@ final class ExportPresentationTests: XCTestCase {
         XCTAssertEqual(ClientTarget.clash.subtitle, "Clash YAML")
         XCTAssertEqual(ClientTarget.clash.appIconAssetName, "ClientStash")
         XCTAssertEqual(ClientTarget.clash.brandColorHex, "1473E6")
+    }
+
+    func testClashAppUsesASeparateOfficialAppStoreIdentity() throws {
+        let target = try XCTUnwrap(ClientTarget(rawValue: "clash-apple"))
+
+        XCTAssertEqual(target.name, "Clash")
+        XCTAssertEqual(target.subtitle, "Clash / mihomo")
+        XCTAssertEqual(target.fileExtension, "yaml")
+        XCTAssertEqual(target.appIconAssetName, "ClientClashOfficial")
+        XCTAssertNotNil(UIImage(named: "ClientClashOfficial"))
+        XCTAssertTrue(target.supportsDirectImport(mode: .fullConfiguration))
+        XCTAssertFalse(target.supportsDirectImport(mode: .nodesOnly))
+        XCTAssertEqual(ClientTarget.allCases.last, target)
+    }
+
+    func testV2BoxOnlyOffersNodeSubscription() throws {
+        let target = try XCTUnwrap(ClientTarget(rawValue: "v2box"))
+
+        XCTAssertEqual(target.name, "V2Box")
+        XCTAssertEqual(target.supportedContentModes, [.nodesOnly])
+        XCTAssertFalse(target.supportsDirectImport(mode: .fullConfiguration))
+        XCTAssertTrue(target.supportsDirectImport(mode: .nodesOnly))
+        XCTAssertEqual(target.fileExtension, "txt")
+    }
+
+    func testV2BoxSupportsEveryScreenshotConfirmedTowerProtocol() throws {
+        let target = try XCTUnwrap(ClientTarget(rawValue: "v2box"))
+        let supported = Set(ProxyKind.allCases.filter(target.supports))
+
+        XCTAssertEqual(
+            supported,
+            [.shadowsocks, .vmess, .vless, .trojan, .wireguard, .hysteria2, .socks5, .http]
+        )
     }
 
     func testExportedConfigurationUsesAStableClientSpecificFileName() {
@@ -222,5 +341,22 @@ final class ExportPresentationTests: XCTestCase {
             skippedNodeCount: 0,
             ruleCount: 1
         )
+    }
+}
+
+private extension ExportPresentationTests {
+    func style(
+        at substring: String,
+        in content: String,
+        spans: [ConfigurationSyntaxHighlighter.Span]
+    ) -> ConfigurationSyntaxHighlighter.Style? {
+        let location = (content as NSString).range(of: substring).location
+        return spans.last { NSLocationInRange(location, $0.range) }?.style
+    }
+}
+
+private extension NSRange {
+    var nonEmpty: NSRange? {
+        location == NSNotFound || length == 0 ? nil : self
     }
 }

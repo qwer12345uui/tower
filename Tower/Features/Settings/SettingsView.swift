@@ -2,22 +2,21 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @Binding var configurationNameDraft: ConfigurationNameDraft
-    @State private var selectedClient: ClientTarget?
-    @State private var isConfirmingTokenRotation = false
+    let openLANSharing: () -> Void
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 22) {
                 NodeAndExportSettingsCard(configurationNameDraft: $configurationNameDraft)
-                LANSharingCard(
-                    selectedClient: $selectedClient,
-                    isConfirmingTokenRotation: $isConfirmingTokenRotation
-                )
-                LANSharingGuide()
+                LANSharingSettingsRow {
+                    openLANSharing()
+                    dismiss()
+                }
                 CloudSyncCard()
                 SecurityAndSourceLink()
+                ResetAllConfigurationCard(configurationNameDraft: $configurationNameDraft)
             }
             .padding(.horizontal, TowerTheme.pagePadding)
             .padding(.top, 12)
@@ -25,17 +24,75 @@ struct SettingsView: View {
         }
         .background(TowerTheme.background.ignoresSafeArea())
         .navigationTitle("设置")
-        .confirmationDialog(
-            "更换访问密钥？",
-            isPresented: $isConfirmingTokenRotation,
-            titleVisibility: .visible
-        ) {
-            Button("更换密钥并停用旧链接", role: .destructive) {
-                model.rotateLANSharingToken()
+    }
+}
+
+/// Reset is intentionally the last setting and requires a stable alert.
+///
+/// A destructive confirmation dialog anchored to a scrolling row can appear
+/// to drift on iPad. An alert stays centered and gives the consequences enough
+/// room to remain readable on every device size.
+private struct ResetAllConfigurationCard: View {
+    @Environment(AppModel.self) private var model
+    @Binding var configurationNameDraft: ConfigurationNameDraft
+    @State private var isConfirmingReset = false
+    @State private var isResetting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(title: "重置", detail: String(localized: "不可撤销"))
+
+            Button(role: .destructive) {
+                isConfirmingReset = true
+            } label: {
+                HStack(spacing: 13) {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 48, height: 48)
+                        .background(
+                            Color.red.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("重置所有配置")
+                            .font(.headline)
+                            .foregroundStyle(.red)
+                        Text("删除订阅、节点和这台设备上的设置")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if isResetting {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(16)
+                .contentShape(Rectangle())
+                .towerCard()
+            }
+            .buttonStyle(ResponsivePressButtonStyle())
+            .disabled(model.isCloudSyncing || isResetting)
+            .accessibilityIdentifier("reset-all-configuration")
+        }
+        .alert("重置所有配置？", isPresented: $isConfirmingReset) {
+            Button("重置所有配置", role: .destructive) {
+                isResetting = true
+                Task { @MainActor in
+                    await model.resetAllConfiguration()
+                    configurationNameDraft = ConfigurationNameDraft(text: TowerBrand.localizedName)
+                    isResetting = false
+                }
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("所有已经添加到电脑或路由器的塔台订阅链接都会失效。")
+            Text("将清除这台设备上的订阅、自建节点、规则自定义、导出偏好和本机缓存，并关闭续费提醒、局域网共享及 iCloud 同步。此操作无法撤销；iCloud 上的副本不会被删除，系统权限也不会改变。")
         }
     }
 }
@@ -76,6 +133,7 @@ private struct AutoRefreshSection: View {
 private struct CloudSyncCard: View {
     @Environment(AppModel.self) private var model
     @State private var isConfirming = false
+    @State private var isConfirmingDisable = false
 
     private var binding: Binding<Bool> {
         Binding(
@@ -84,7 +142,10 @@ private struct CloudSyncCard: View {
                 if wantsOn {
                     isConfirming = true
                 } else {
-                    Task { await model.setICloudSyncEnabled(false) }
+                    // Switching off is also the moment to offer taking the
+                    // uploaded credentials back out of iCloud, which is the
+                    // only place in Tower where they ever left the device.
+                    isConfirmingDisable = true
                 }
             }
         )
@@ -92,7 +153,7 @@ private struct CloudSyncCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeading(title: "iCloud 同步", detail: "默认关闭")
+            SectionHeading(title: "iCloud 同步", detail: String(localized: "默认关闭"))
             VStack(alignment: .leading, spacing: 13) {
                 Toggle(isOn: binding) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -119,6 +180,17 @@ private struct CloudSyncCard: View {
                     .disabled(model.isCloudSyncing)
                 }
 
+                if !model.iCloudSyncEnabled {
+                    Divider()
+                    Button(role: .destructive) {
+                        Task { await model.removeCloudSnapshot() }
+                    } label: {
+                        Label("删除 iCloud 上的副本", systemImage: "trash")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityIdentifier("remove-cloud-snapshot")
+                }
+
                 Divider()
                 Label(
                     "开启后，订阅地址和节点密码会存进您的 iCloud 账户。两台设备都改过时，以最后保存的那份为准。",
@@ -135,7 +207,25 @@ private struct CloudSyncCard: View {
             Button("开启") { Task { await model.setICloudSyncEnabled(true) } }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("您的订阅地址和节点密码会上传到您自己的 iCloud 账户，用于在同一 Apple 账户的设备之间同步。它们不会发给塔台或任何第三方。关闭同步不会删除 iCloud 上已有的副本。")
+            Text("您的订阅地址和节点密码会上传到您自己的 iCloud 账户，用于在同一 Apple 账户的设备之间同步。它们不会发给塔台或任何第三方。关闭同步后可以选择一并删除 iCloud 上的副本。")
+        }
+        .confirmationDialog(
+            "关闭 iCloud 同步？",
+            isPresented: $isConfirmingDisable,
+            titleVisibility: .visible
+        ) {
+            Button("关闭并删除 iCloud 副本", role: .destructive) {
+                Task {
+                    await model.setICloudSyncEnabled(false)
+                    await model.removeCloudSnapshot()
+                }
+            }
+            Button("只关闭同步") {
+                Task { await model.setICloudSyncEnabled(false) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只关闭同步会把已经上传的订阅地址和节点密码留在 iCloud 上。删除副本不影响这台设备上的配置。")
         }
     }
 
@@ -252,7 +342,7 @@ private struct NodeAndExportSettingsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeading(title: "节点与配置", detail: "默认保持原始订阅")
+            SectionHeading(title: "节点与配置", detail: String(localized: "默认保持原始订阅"))
 
             RenewalReminderSection()
 
@@ -460,7 +550,7 @@ private struct RenewalReminderSection: View {
                 Divider()
 
                 Button {
-                    withAnimation(expansionAnimation) {
+                    withAnimation(TowerMotion.disclosure(reduceMotion: reduceMotion)) {
                         isExpanded.toggle()
                     }
                 } label: {
@@ -481,7 +571,7 @@ private struct RenewalReminderSection: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(ResponsivePressButtonStyle())
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("renewal-reminder-disclosure")
 
                 if isExpanded {
@@ -503,9 +593,6 @@ private struct RenewalReminderSection: View {
         }
     }
 
-    private var expansionAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.14) : .interactiveSpring(response: 0.34, dampingFraction: 1)
-    }
 }
 
 private struct RenewalReminderDetailRow: View {
@@ -537,15 +624,6 @@ private struct RenewalReminderDetailRow: View {
                 Text("到期日期：\(reminder.expiryDate.formatted(date: .abbreviated, time: .omitted))")
                     .font(.caption)
                     .foregroundStyle(isExpired ? .red : .secondary)
-                if !isExpired {
-                    Label("到期前一天通知", systemImage: "clock")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.orange)
-                } else {
-                    Label("续费提醒", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.red)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -563,19 +641,68 @@ private struct RenewalReminderDetailRow: View {
     }
 }
 
-private struct LANSharingCard: View {
+private struct LANSharingSettingsRow: View {
     @Environment(AppModel.self) private var model
-    @Binding var selectedClient: ClientTarget?
-    @Binding var isConfirmingTokenRotation: Bool
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 13) {
+                Image(systemName: model.isLANSharingActive ? "wifi.circle.fill" : "wifi.slash")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(model.isLANSharingActive ? .green : Color.accentColor)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        (model.isLANSharingActive ? Color.green : Color.accentColor).opacity(0.11),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("局域网共享")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(model.isLANSharingActive
+                        ? String(localized: "支持安卓、Windows、Mac、路由器等。")
+                        : String(localized: "没有对外提供服务"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 6) {
+                    Text(model.isLANSharingActive
+                        ? String(localized: "正在共享")
+                        : String(localized: "默认关闭"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(model.isLANSharingActive ? .green : .secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(16)
+            .contentShape(Rectangle())
+            .towerCard()
+        }
+        .buttonStyle(ResponsivePressButtonStyle())
+        .accessibilityIdentifier("open-lan-export-destination")
+    }
+}
+
+struct LANSharingDestinationCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var selectedClient: LANSubscriptionFormat?
+    @State private var isConfirmingTokenRotation = false
 
     private var selectedURL: URL? {
-        model.lanSubscriptionURL(target: selectedClient)
+        model.lanSubscriptionURL(format: selectedClient)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeading(
-                title: "局域网订阅",
+                title: "局域网共享",
                 detail: model.isLANSharingActive
                     ? String(localized: "正在共享")
                     : String(localized: "默认关闭")
@@ -593,11 +720,11 @@ private struct LANSharingCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(model.isLANSharingActive
-                        ? String(localized: "同一 Wi-Fi 可访问")
+                        ? String(localized: "支持安卓、Windows、Mac、路由器等。")
                         : String(localized: "没有对外提供服务"))
                         .font(.headline)
                     Text(model.isLANSharingActive
-                        ? String(localized: "共享的是转换结果，不含机场原始链接")
+                        ? String(localized: "自动识别客户端")
                         : String(localized: "只有您主动开启后才会监听局域网"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -656,6 +783,18 @@ private struct LANSharingCard: View {
         .padding(17)
         .towerCard()
         .accessibilityIdentifier("lan-subscription-card")
+        .confirmationDialog(
+            "更换访问密钥？",
+            isPresented: $isConfirmingTokenRotation,
+            titleVisibility: .visible
+        ) {
+            Button("更换密钥并停用旧链接", role: .destructive) {
+                model.rotateLANSharingToken()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("所有已经添加到电脑或路由器的塔台订阅链接都会失效。")
+        }
     }
 
     /// Label on the left, the current value as a button on the right.
@@ -674,14 +813,25 @@ private struct LANSharingCard: View {
             Menu {
                 Picker("链接格式", selection: $selectedClient) {
                     Label("自动识别客户端", systemImage: "wand.and.stars")
-                        .tag(ClientTarget?.none)
-                    ForEach(ClientTarget.allCases) { target in
-                        Text(lanDisplayName(target)).tag(Optional(target))
+                        .tag(LANSubscriptionFormat?.none)
+                    ForEach(LANSubscriptionFormat.allCases) { format in
+                        Label {
+                            Text(format.displayName)
+                        } icon: {
+                            LANClientIcon(format: format, size: 20)
+                        }
+                            .tag(Optional(format))
                     }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Text(selectedClient.map(lanDisplayName) ?? String(localized: "自动识别客户端"))
+                    if let selectedClient {
+                        LANClientIcon(format: selectedClient, size: 20)
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption.weight(.semibold))
+                    }
+                    Text(selectedClient?.displayName ?? String(localized: "自动识别客户端"))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
@@ -699,17 +849,29 @@ private struct LANSharingCard: View {
             }
             .buttonStyle(ResponsivePressButtonStyle())
             .accessibilityLabel(Text("链接格式"))
-            .accessibilityValue(Text(selectedClient.map(lanDisplayName) ?? String(localized: "自动识别客户端")))
+            .accessibilityValue(Text(selectedClient?.displayName ?? String(localized: "自动识别客户端")))
             .accessibilityIdentifier("lan-client-picker")
         }
     }
 
-    private func lanDisplayName(_ target: ClientTarget) -> String {
-        switch target {
-        case .clash: "OpenClash / Clash / Stash"
-        case .quanx: "Quantumult X"
-        default: target.name
-        }
+}
+
+private struct LANClientIcon: View {
+    let format: LANSubscriptionFormat
+    let size: CGFloat
+
+    var body: some View {
+        Image(format.appIconAssetName)
+            .resizable()
+            .renderingMode(.original)
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                    .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+            }
+            .accessibilityHidden(true)
     }
 }
 
@@ -871,7 +1033,7 @@ private struct URLPanel: View {
     }
 }
 
-private struct LANSharingGuide: View {
+struct LANSharingGuide: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading(title: "怎么使用", detail: "OpenClash · Windows · Mac")
