@@ -477,7 +477,7 @@ final class RepositoryConsistencyTests: XCTestCase {
         XCTAssertTrue(menuSource.contains("toggleRuleGroupEmojiVisibilityAfterMenuDismiss()"))
         XCTAssertTrue(menuSource.contains(".menuActionDismissBehavior(.enabled)"))
         XCTAssertTrue(sheetSource.contains("private func toggleRuleGroupEmojiVisibilityAfterMenuDismiss()"))
-        XCTAssertTrue(sheetSource.contains("Task.sleep(for: .milliseconds(180))"))
+        XCTAssertTrue(sheetSource.contains("Task.sleep(nanoseconds: 180_000_000)"))
         XCTAssertTrue(sheetSource.contains("transaction.disablesAnimations = true"))
         XCTAssertEqual(
             sheetSource.components(separatedBy: "visibleRuleGroupEmoji(group)").count - 1,

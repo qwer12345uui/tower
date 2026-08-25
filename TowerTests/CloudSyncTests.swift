@@ -132,7 +132,7 @@ final class CloudSyncTests: XCTestCase {
         let model = AppModel(
             persistence: persistence,
             cloudSync: cloud,
-            persistencePolicy: .coalesced(.seconds(30)),
+            persistencePolicy: .coalesced(30),
             arguments: []
         )
         model.setConfigurationName("Queued Local Edit")
@@ -144,7 +144,7 @@ final class CloudSyncTests: XCTestCase {
 
         // The local edit also queued a delayed iCloud upload. Let its old
         // deadline pass and prove it cannot overwrite the accepted remote.
-        try await Task.sleep(for: .milliseconds(2_100))
+        try await Task.sleep(nanoseconds: 2_100_000_000)
         let finalRemote = try await cloud.download()
         XCTAssertEqual(finalRemote?.configurationName, "Remote Winner")
     }
