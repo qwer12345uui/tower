@@ -282,7 +282,6 @@ struct CompactNodeRow: View {
                 Text(node.protocolSummary)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .kerning(0.18)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
@@ -355,7 +354,6 @@ struct ExpandableNodeRow: View {
                             Text(node.protocolSummary)
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
-                                .kerning(0.18)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.82)
                         }
