@@ -92,8 +92,10 @@ struct SubscriptionsView: View {
                         .zIndex(10)
                 }
             }
-            .navigationDestination(item: $nodeFilterRoute) { route in
-                NodeFilterView(initialFocus: route)
+            .sheet(item: $nodeFilterRoute) { route in
+                NavigationView {
+                    NodeFilterView(initialFocus: route)
+                }
             }
             .alert(
                 pendingDeletion?.title ?? String(localized: "确认删除"),
@@ -328,8 +330,7 @@ private struct EditSubscriptionSheet: View {
                 Section("订阅") {
                     TextField("名称（可选）", text: $nameDraft.text)
                         .textContentType(.organizationName)
-                    TextField("订阅链接", text: $urlString, axis: .vertical)
-                        .lineLimit(2...5)
+                    TextField("订阅链接", text: $urlString)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

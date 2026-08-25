@@ -122,10 +122,10 @@ struct AddSourceSheet: View {
                 if editingNode == nil { requestClipboardContent() }
             }
             .onDisappear { saveTask?.cancel() }
-            .onChange(of: sourceValue) {
+            .onChange(of: sourceValue) { _ in
                 errorMessage = nil
             }
-            .onChange(of: entryMode) {
+            .onChange(of: entryMode) { _ in
                 focusedField = nil
                 errorMessage = nil
             }
@@ -164,8 +164,7 @@ struct AddSourceSheet: View {
     @ViewBuilder
     private var pasteSections: some View {
         Section {
-            TextField("粘贴订阅链接或节点协议", text: $sourceValue, axis: .vertical)
-                .lineLimit(3...10)
+            TextField("粘贴订阅链接或节点协议", text: $sourceValue)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
