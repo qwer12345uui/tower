@@ -52,7 +52,6 @@ struct WelcomeView: View {
                 .padding(.horizontal, 26)
                 .padding(.bottom, 28)
             }
-            .scrollBounceBehavior(.basedOnSize)
 
             footer
         }

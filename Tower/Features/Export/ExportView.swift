@@ -75,7 +75,6 @@ struct ExportView: View {
         }
         .sheet(item: $sharePayload) { payload in
             ActivitySheet(items: [payload.url])
-                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $isSettingsPresented) {
             ExportSettingsSheet(
@@ -266,13 +265,6 @@ private struct ClientPicker: View {
                         }
                         .buttonStyle(ResponsivePressButtonStyle())
                         .accessibilityIdentifier("client-\(target.rawValue)")
-                        .draggable(target.rawValue)
-                        .dropDestination(for: String.self) { values, _ in
-                            guard let rawValue = values.first,
-                                  let source = ClientTarget(rawValue: rawValue) else { return false }
-                            model.moveClient(source, before: target)
-                            return true
-                        }
                         .accessibilityAction(named: "向前移动") {
                             model.moveClient(target, by: -1)
                         }
@@ -287,7 +279,6 @@ private struct ClientPicker: View {
                 }
                 .padding(.vertical, 4)
             }
-            .scrollIndicators(.hidden)
         }
     }
 

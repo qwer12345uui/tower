@@ -495,7 +495,12 @@ struct AddSourceSheet: View {
                         }
                     }
                 } else {
-                    LabeledContent("安全方式", value: "TLS")
+                    HStack {
+                        Text("安全方式")
+                        Spacer()
+                        Text("TLS")
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 if usesTLSSettings {

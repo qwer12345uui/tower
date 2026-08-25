@@ -190,7 +190,7 @@ private struct RulesOverviewCard: View {
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background(
-                        TowerTheme.color(named: tintName).gradient,
+                        TowerTheme.color(named: tintName),
                         in: RoundedRectangle(cornerRadius: 15, style: .continuous)
                     )
             }
@@ -544,7 +544,6 @@ private struct ImportedRuleSchemeEditor: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 }
 
@@ -870,7 +869,6 @@ private struct RuleCustomizationSheet: View {
             }
             .towerToast()
         }
-        .presentationDetents([.large])
         .onAppear {
             synchronizeGroupDraft(with: model.customizableRuleGroups(for: scheme))
         }
@@ -1441,7 +1439,6 @@ private struct RuleGroupIdentityEditor: View {
                 Text(errorMessage ?? "")
             }
         }
-        .presentationDetents([.medium])
     }
 
     private func save() {
@@ -1716,7 +1713,6 @@ private struct SaveCustomizedSchemeSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 }
 

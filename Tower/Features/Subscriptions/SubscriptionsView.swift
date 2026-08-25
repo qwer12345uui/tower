@@ -415,7 +415,7 @@ private struct SubscriptionOverviewCard: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
-                    .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
 
             HStack(spacing: 10) {
