@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// A self-contained bottom navigation surface that intentionally uses only
-/// iOS 15 SwiftUI materials and system colors. Its large, equal-width targets
-/// keep the visual treatment from reducing the reliability of tab selection.
+/// A self-contained floating tab surface that uses only iOS 15 materials and
+/// system colors. Its three equal-width buttons keep tab selection predictable
+/// without adding a gesture that could compete with page or list scrolling.
 struct AdaptiveGlassTabBar: View {
     @Binding var selection: AppTab
 
@@ -14,27 +14,31 @@ struct AdaptiveGlassTabBar: View {
         colorScheme == .dark
     }
 
+    private var selectionAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .interactiveSpring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.12)
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             ForEach(AppTab.allCases) { tab in
                 tabButton(for: tab)
             }
         }
-        .padding(6)
+        .frame(maxWidth: .infinity)
+        .padding(5)
         .background(glassSurface)
         .overlay {
-            RoundedRectangle(cornerRadius: 31, style: .continuous)
-                .stroke(borderColor, lineWidth: 1)
+            Capsule()
+                .stroke(borderColor, lineWidth: isDark ? 0.9 : 0.7)
         }
         .shadow(
-            color: isDark ? Color.black.opacity(0.52) : Color.black.opacity(0.14),
-            radius: isDark ? 18 : 15,
-            y: 7
+            color: Color.black.opacity(isDark ? 0.30 : 0.12),
+            radius: isDark ? 16 : 13,
+            y: isDark ? 8 : 6
         )
-        .animation(
-            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.30, dampingFraction: 0.88),
-            value: selection
-        )
+        .animation(selectionAnimation, value: selection)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("主导航")
     }
@@ -45,31 +49,36 @@ struct AdaptiveGlassTabBar: View {
         return Button {
             selection = tab
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(height: 24)
+                    .font(.system(size: 19, weight: .bold))
+                    .frame(height: 23)
 
                 Text(tab.title)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption.weight(.bold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.78)
             }
             .foregroundStyle(foregroundColor(selected: isSelected))
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .frame(maxWidth: .infinity, minHeight: 50)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    Capsule()
                         .fill(selectionFill)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(selectionBorder, lineWidth: 0.75)
+                            Capsule()
+                                .stroke(selectionBorder, lineWidth: 0.7)
                         }
+                        .shadow(
+                            color: Color.pink.opacity(isDark ? 0.20 : 0.12),
+                            radius: 7,
+                            y: 3
+                        )
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GlassTabPressStyle())
         .accessibilityLabel(tab.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint(isSelected ? "当前页面" : "切换到\(tab.title)页面")
@@ -78,17 +87,13 @@ struct AdaptiveGlassTabBar: View {
     @ViewBuilder
     private var glassSurface: some View {
         if reduceTransparency {
-            RoundedRectangle(cornerRadius: 31, style: .continuous)
+            Capsule()
                 .fill(fallbackSurfaceColor)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 31, style: .continuous)
-                        .fill(surfaceTint)
-                }
         } else {
-            RoundedRectangle(cornerRadius: 31, style: .continuous)
+            Capsule()
                 .fill(.ultraThinMaterial)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 31, style: .continuous)
+                    Capsule()
                         .fill(surfaceTint)
                 }
         }
@@ -99,28 +104,41 @@ struct AdaptiveGlassTabBar: View {
     }
 
     private var surfaceTint: Color {
-        isDark ? Color.black.opacity(reduceTransparency ? 0 : 0.26) : Color.white.opacity(reduceTransparency ? 0 : 0.48)
+        isDark ? Color.black.opacity(0.24) : Color.white.opacity(0.44)
     }
 
     private var borderColor: Color {
-        isDark ? Color.white.opacity(0.24) : Color.white.opacity(0.88)
+        isDark ? Color.white.opacity(0.30) : Color.white.opacity(0.90)
     }
 
     private var selectionFill: Color {
-        if isDark {
-            return Color.accentColor.opacity(0.36)
-        }
-        return Color.accentColor.opacity(0.14)
+        Color.pink.opacity(isDark ? 0.44 : 0.18)
     }
 
     private var selectionBorder: Color {
-        isDark ? Color.white.opacity(0.22) : Color.white.opacity(0.70)
+        isDark ? Color.pink.opacity(0.58) : Color.white.opacity(0.78)
     }
 
     private func foregroundColor(selected: Bool) -> Color {
         if selected {
-            return isDark ? .white : .accentColor
+            return isDark ? .white : .pink
         }
-        return isDark ? Color.white.opacity(0.82) : .primary
+        return isDark ? Color.white.opacity(0.86) : Color.primary.opacity(0.62)
+    }
+}
+
+private struct GlassTabPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.12)
+                    : .interactiveSpring(response: 0.20, dampingFraction: 0.90),
+                value: configuration.isPressed
+            )
     }
 }
