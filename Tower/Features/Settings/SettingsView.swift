@@ -33,7 +33,7 @@ struct SettingsView: View {
 /// to drift on iPad. An alert stays centered and gives the consequences enough
 /// room to remain readable on every device size.
 private struct ResetAllConfigurationCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var configurationNameDraft: ConfigurationNameDraft
     @State private var isConfirmingReset = false
     @State private var isResetting = false
@@ -104,7 +104,7 @@ private struct ResetAllConfigurationCard: View {
 /// named for that moment — "打开塔台时" — rather than promising the
 /// subscription stays current on its own.
 private struct AutoRefreshSection: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     private var binding: Binding<Bool> {
         Binding(get: { model.autoRefreshOnOpen }, set: model.setAutoRefreshOnOpen)
@@ -131,7 +131,7 @@ private struct AutoRefreshSection: View {
 /// happens rather than "sync your settings" — the user is agreeing to put
 /// subscription URLs and node passwords in their iCloud account.
 private struct CloudSyncCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var isConfirming = false
     @State private var isConfirmingDisable = false
 
@@ -317,7 +317,7 @@ struct SecurityAndSourceView: View {
 
 private struct NodeAndExportSettingsCard: View {
     @Binding var configurationNameDraft: ConfigurationNameDraft
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     private var appendNameBinding: Binding<Bool> {
         Binding(
@@ -510,7 +510,7 @@ struct SettingsRowLabel: View {
 /// with my subscriptions", which is the question that card is already about.
 /// As separate cards they read as three unrelated topics stacked up.
 private struct RenewalReminderSection: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
 
@@ -587,8 +587,7 @@ private struct RenewalReminderSection: View {
             }
         }
         .accessibilityIdentifier("renewal-reminder-card")
-        .sensoryFeedback(.selection, trigger: isExpanded)
-        .onChange(of: model.renewalRemindersEnabled) { _, isEnabled in
+        .onChange(of: model.renewalRemindersEnabled) { isEnabled in
             if !isEnabled { isExpanded = false }
         }
     }
@@ -642,7 +641,7 @@ private struct RenewalReminderDetailRow: View {
 }
 
 private struct LANSharingSettingsRow: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let open: () -> Void
 
     var body: some View {
@@ -691,7 +690,7 @@ private struct LANSharingSettingsRow: View {
 }
 
 struct LANSharingDestinationCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var selectedClient: LANSubscriptionFormat?
     @State private var isConfirmingTokenRotation = false
 
@@ -876,7 +875,7 @@ private struct LANClientIcon: View {
 }
 
 private struct URLPanel: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let url: URL
 
@@ -887,6 +886,7 @@ private struct URLPanel: View {
     @State private var qrRenderedURL: URL?
     @State private var qrFailed = false
     @State private var didCopy = false
+    @State private var isActivityPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -917,18 +917,19 @@ private struct URLPanel: View {
                         isShowingQRCode.toggle()
                     }
                 }
-                ShareLink(item: url) {
-                    actionLabel("分享", symbol: "square.and.arrow.up", isOn: false)
+                action("分享", symbol: "square.and.arrow.up", isOn: false) {
+                    isActivityPresented = true
                 }
-                .buttonStyle(ResponsivePressButtonStyle())
             }
-            .sensoryFeedback(.success, trigger: didCopy)
 
             if isShowingQRCode {
                 qrCode
                     .frame(maxWidth: .infinity)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
             }
+        }
+        .sheet(isPresented: $isActivityPresented) {
+            ActivitySheet(items: [url])
         }
         .padding(13)
         .background(Color.accentColor.opacity(0.075), in: RoundedRectangle(cornerRadius: 15, style: .continuous))

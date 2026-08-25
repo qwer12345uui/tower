@@ -522,7 +522,8 @@ final class WorldDotMapTests: XCTestCase {
             .appendingPathComponent("Tower/Features/Subscriptions/WorldDotMapView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("SpatialTapGesture"))
+        XCTAssertTrue(source.contains("DragGesture(minimumDistance: 0)"))
+        XCTAssertTrue(source.contains("let location = value.startLocation"))
         XCTAssertTrue(source.contains("? Color.primary"))
     }
 

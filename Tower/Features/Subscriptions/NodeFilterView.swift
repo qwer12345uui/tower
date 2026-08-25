@@ -28,7 +28,7 @@ struct NodeFilterCriteria: Equatable {
 }
 
 struct NodeFilterView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let initialFocus: NodeFilterRoute
 
@@ -66,7 +66,7 @@ struct NodeFilterView: View {
 
             Section {
                 if filteredNodes.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
+                    LegacyUnavailableView.search(text: searchText)
                         .listRowBackground(Color.clear)
                 } else {
                     ForEach(filteredNodes) { node in
@@ -90,7 +90,6 @@ struct NodeFilterView: View {
             : String(localized: "节点筛选"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "搜索节点、服务器或来源")
-        .scrollDismissesKeyboard(.interactively)
         .task(id: resolutionTaskID) {
             await model.resolveIPCountries(for: model.availableNodes)
         }

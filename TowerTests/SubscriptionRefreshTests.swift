@@ -54,7 +54,7 @@ private actor RateLimitedSubscriptionFetcher: SubscriptionFetching {
         requestedIDs.append(source.id)
         defer { activeRequestCount -= 1 }
 
-        try await Task.sleep(for: .milliseconds(30))
+        try await Task.sleep(nanoseconds: 30_000_000)
         return ImportResult(nodes: [], rejectedLineCount: 0, usage: nil)
     }
 }
@@ -64,7 +64,7 @@ private actor CancellationSensitiveFetcher: SubscriptionFetching {
 
     func fetch(_ source: SubscriptionSource) async throws -> ImportResult {
         requestedIDs.append(source.id)
-        try await Task.sleep(for: .milliseconds(60))
+        try await Task.sleep(nanoseconds: 60_000_000)
         try Task.checkCancellation()
         return ImportResult(nodes: [], rejectedLineCount: 0, usage: nil)
     }
@@ -148,14 +148,14 @@ final class SubscriptionRefreshTests: XCTestCase {
         model.subscriptions = sources
 
         let gestureTask = Task { await model.refreshAllSubscriptions() }
-        try await Task.sleep(for: .milliseconds(80))
+        try await Task.sleep(nanoseconds: 80_000_000)
         gestureTask.cancel()
         _ = await gestureTask.value
 
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = Date().addingTimeInterval(2)
         while model.subscriptions.contains(where: { $0.lastUpdatedAt == nil }),
-              ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(20))
+              Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
         }
 
         let requestedIDs = await fetcher.requestedIDs

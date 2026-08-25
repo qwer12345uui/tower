@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RulesView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var isImportPresented = false
     @State private var pendingDeletion: RuleScheme?
     @State private var editingImportedScheme: RuleScheme?
@@ -48,7 +48,6 @@ struct RulesView: View {
                 .accessibilityIdentifier("import-rule-scheme")
             }
         }
-        .sensoryFeedback(.selection, trigger: model.selectedPresetID)
         .sheet(isPresented: $isImportPresented) {
             ImportRuleSchemeSheet()
         }
@@ -170,7 +169,7 @@ struct RulesView: View {
 }
 
 private struct RulesOverviewCard: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -178,12 +177,14 @@ private struct RulesOverviewCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.title2.weight(.bold))
-                        .lineLimit(1, reservesSpace: true)
+                        .lineLimit(1)
+                        .frame(minHeight: 28, alignment: .topLeading)
                         .minimumScaleFactor(0.8)
                     Text(summary)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2, reservesSpace: true)
+                        .lineLimit(2)
+                        .frame(minHeight: 34, alignment: .topLeading)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: symbol)
@@ -191,7 +192,7 @@ private struct RulesOverviewCard: View {
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background(
-                        TowerTheme.color(named: tintName).gradient,
+                        TowerTheme.color(named: tintName),
                         in: RoundedRectangle(cornerRadius: 15, style: .continuous)
                     )
             }
@@ -483,7 +484,6 @@ private struct RuleSchemeCard: View {
                 .stroke(isSelected ? Color.accentColor.opacity(0.65) : Color.clear, lineWidth: 1.5)
                 .animation(TowerMotion.selection(reduceMotion: reduceMotion), value: isSelected)
         }
-        .sensoryFeedback(.selection, trigger: isExpanded)
     }
 
     private func description(of group: RuleSchemeGroup) -> String {
@@ -503,7 +503,7 @@ private struct RuleSchemeCard: View {
 }
 
 private struct ImportedRuleSchemeEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var name: String
@@ -516,12 +516,11 @@ private struct ImportedRuleSchemeEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("名称", text: $name)
-                    TextField("简介", text: $summary, axis: .vertical)
-                        .lineLimit(3...6)
+                    TextField("简介", text: $summary)
                 } footer: {
                     Text("只修改显示信息，不会更改规则内容或来源链接。")
                 }
@@ -546,12 +545,11 @@ private struct ImportedRuleSchemeEditor: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 }
 
 private struct ImportRuleSchemeSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var urlString = ""
     @State private var name = ""
@@ -560,11 +558,10 @@ private struct ImportRuleSchemeSheet: View {
     @FocusState private var isURLFocused: Bool
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
-                    TextField("https://…", text: $urlString, axis: .vertical)
-                        .lineLimit(2...6)
+                    TextField("https://…", text: $urlString)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -590,7 +587,6 @@ private struct ImportRuleSchemeSheet: View {
             }
             .navigationTitle("导入规则")
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -605,7 +601,7 @@ private struct ImportRuleSchemeSheet: View {
                 }
             }
             .onAppear { isURLFocused = true }
-            .onChange(of: urlString) { errorMessage = nil }
+            .onChange(of: urlString) { _ in errorMessage = nil }
         }
     }
 
@@ -696,7 +692,7 @@ private enum RuleCustomizationDeletion {
 /// hand-written rules. Search is the primary path; raw syntax stays one level
 /// deeper for people who actually need it.
 private struct RuleCustomizationSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     @State private var ruleEditMode: EditMode = .inactive
@@ -749,7 +745,7 @@ private struct RuleCustomizationSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 customRuleGroupsSection
                 localRuleSetsSection
@@ -766,7 +762,6 @@ private struct RuleCustomizationSheet: View {
                 // which is the whole promise of the screen.
                 prompt: "在线搜索规则：如 YouTube OpenAI"
             )
-            .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("rule-customization-list")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -776,7 +771,6 @@ private struct RuleCustomizationSheet: View {
                         } label: {
                             Label("显示策略组 Emoji", systemImage: "face.smiling")
                         }
-                        .menuActionDismissBehavior(.enabled)
                         Button {
                             showsSaveScheme = true
                         } label: {
@@ -874,11 +868,10 @@ private struct RuleCustomizationSheet: View {
             }
             .towerToast()
         }
-        .presentationDetents([.large])
         .onAppear {
             synchronizeGroupDraft(with: model.customizableRuleGroups(for: scheme))
         }
-        .onChange(of: model.customizableRuleGroups(for: scheme)) { _, groups in
+        .onChange(of: model.customizableRuleGroups(for: scheme)) { groups in
             guard !ruleEditMode.isEditing else { return }
             synchronizeGroupDraft(with: groups)
         }
@@ -896,7 +889,7 @@ private struct RuleCustomizationSheet: View {
     private func toggleRuleGroupEmojiVisibilityAfterMenuDismiss() {
         let enabled = !model.ruleGroupEmojisAreEnabled(for: scheme)
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(nanoseconds: 180_000_000)
             guard !Task.isCancelled else { return }
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
@@ -987,7 +980,7 @@ private struct RuleCustomizationSheet: View {
         }
 
         if visibleCatalogEntries.isEmpty {
-            ContentUnavailableView.search(text: trimmedSearch)
+            LegacyUnavailableView.search(text: trimmedSearch)
                 .listRowBackground(Color.clear)
         } else {
             Section {
@@ -1379,7 +1372,7 @@ private struct RuleCustomizationSheet: View {
 }
 
 private struct RuleGroupIdentityEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let group: RuleSchemeGroup
@@ -1409,7 +1402,7 @@ private struct RuleGroupIdentityEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     HStack(spacing: 12) {
@@ -1445,7 +1438,6 @@ private struct RuleGroupIdentityEditor: View {
                 Text(errorMessage ?? "")
             }
         }
-        .presentationDetents([.medium])
     }
 
     private func save() {
@@ -1464,7 +1456,7 @@ private struct RuleGroupIdentityEditor: View {
 }
 
 private struct RuleGroupEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let group: RuleSchemeGroup
@@ -1512,7 +1504,7 @@ private struct RuleGroupEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List {
                 switch editorMode {
                 case .routingTargets:
@@ -1682,7 +1674,7 @@ private struct OrderedPolicyCandidateSections: View {
 }
 
 private struct SaveCustomizedSchemeSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let onSaved: () -> Void
@@ -1695,7 +1687,7 @@ private struct SaveCustomizedSchemeSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section {
                     TextField("方案名称", text: $name)
@@ -1720,7 +1712,6 @@ private struct SaveCustomizedSchemeSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 }
 
@@ -1775,7 +1766,7 @@ enum RulePolicyPresentation {
 }
 
 private struct CatalogRuleRouteEditor: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let scheme: RuleScheme
     let flow: CustomRuleFlow
@@ -1812,7 +1803,7 @@ private struct CatalogRuleRouteEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 OrderedPolicyCandidateSections(
                     selected: $selectedReferences,
@@ -1883,7 +1874,7 @@ private struct LocalRuleSetEditor: View {
         case rules
     }
 
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let existingRuleSet: LocalRuleSet?
     @State private var name: String
@@ -1925,7 +1916,7 @@ private struct LocalRuleSetEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
                 Section("规则集") {
                     TextField("名称，例如 🎬 奈飞", text: $name)
@@ -1958,8 +1949,7 @@ private struct LocalRuleSetEditor: View {
 
                         TextEditor(text: $rulesText)
                             .font(.system(.footnote, design: .monospaced))
-                            .scrollContentBackground(.hidden)
-                            .frame(minHeight: 230)
+                                            .frame(minHeight: 230)
                             .focused($focusedField, equals: .rules)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -1978,7 +1968,6 @@ private struct LocalRuleSetEditor: View {
                 ? String(localized: "新建规则集")
                 : String(localized: "编辑规则集"))
             .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(false)
             .accessibilityIdentifier("custom-rule-flow-editor")
             .toolbar {

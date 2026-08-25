@@ -389,7 +389,7 @@ final class ReviewFixTests: XCTestCase {
         let store = PersistenceStore(fileURL: stateURL)
         let model = AppModel(
             persistence: store,
-            persistencePolicy: .coalesced(.milliseconds(50)),
+            persistencePolicy: .coalesced(0.05),
             arguments: []
         )
         model.nodes = (0..<3).map { makeNode(name: "节点 \($0)", server: "n\($0).example.com") }
@@ -410,7 +410,7 @@ final class ReviewFixTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: stateURL) }
         let model = AppModel(
             persistence: PersistenceStore(fileURL: stateURL),
-            persistencePolicy: .coalesced(.seconds(30)),
+            persistencePolicy: .coalesced(30),
             arguments: []
         )
         let node = makeNode(name: "节点", server: "node.example.com")

@@ -161,7 +161,7 @@ final class RepositoryConsistencyTests: XCTestCase {
         XCTAssertFalse(source.contains(".swipeActions"))
         XCTAssertTrue(source.contains("pendingDeletion = .group("))
         XCTAssertTrue(source.contains("custom-rule-flow-editor"))
-        XCTAssertTrue(source.contains("scrollDismissesKeyboard(.interactively)"))
+        XCTAssertFalse(source.contains("scrollDismissesKeyboard(.interactively)"))
         XCTAssertTrue(source.contains("scheme.routingTargetGroupNames("))
         XCTAssertFalse(source.contains("model.effectiveScheme(scheme).groups.map(\\.name) + [\"DIRECT\", \"REJECT\"]"))
     }
@@ -475,9 +475,9 @@ final class RepositoryConsistencyTests: XCTestCase {
         )
         XCTAssertFalse(menuSource.contains("Toggle("))
         XCTAssertTrue(menuSource.contains("toggleRuleGroupEmojiVisibilityAfterMenuDismiss()"))
-        XCTAssertTrue(menuSource.contains(".menuActionDismissBehavior(.enabled)"))
+        XCTAssertFalse(menuSource.contains(".menuActionDismissBehavior"))
         XCTAssertTrue(sheetSource.contains("private func toggleRuleGroupEmojiVisibilityAfterMenuDismiss()"))
-        XCTAssertTrue(sheetSource.contains("Task.sleep(for: .milliseconds(180))"))
+        XCTAssertTrue(sheetSource.contains("Task.sleep(nanoseconds: 180_000_000)"))
         XCTAssertTrue(sheetSource.contains("transaction.disablesAnimations = true"))
         XCTAssertEqual(
             sheetSource.components(separatedBy: "visibleRuleGroupEmoji(group)").count - 1,
@@ -564,11 +564,11 @@ final class RepositoryConsistencyTests: XCTestCase {
         let overviewSource = String(source[overviewStart.lowerBound..<nextViewStart.lowerBound])
 
         XCTAssertTrue(
-            overviewSource.contains(".lineLimit(1, reservesSpace: true)"),
+            overviewSource.contains(".frame(minHeight: 28, alignment: .topLeading)"),
             "顶部规则标题必须始终预留一行，不能在切换方案时改变卡片高度"
         )
         XCTAssertTrue(
-            overviewSource.contains(".lineLimit(2, reservesSpace: true)"),
+            overviewSource.contains(".frame(minHeight: 34, alignment: .topLeading)"),
             "顶部规则说明必须始终预留两行，不能推动下方规则列表"
         )
     }

@@ -11,9 +11,11 @@ struct SharePayloadSheet: View {
     @State private var qrImage: UIImage?
     @State private var qrFileURL: URL?
     @State private var qrGenerationFailed = false
+    @State private var activityItems: [Any] = []
+    @State private var isActivityPresented = false
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {
@@ -52,16 +54,19 @@ struct SharePayloadSheet: View {
                             copied = true
                         }
 
-                        ShareLink(item: payload.value) {
-                            shareActionLabel(title: String(localized: "分享链接"), symbol: "square.and.arrow.up")
+                        shareAction(
+                            title: String(localized: "分享链接"),
+                            symbol: "square.and.arrow.up"
+                        ) {
+                            activityItems = [payload.value]
+                            isActivityPresented = true
                         }
-                        .buttonStyle(ResponsivePressButtonStyle())
 
                         if let qrFileURL {
-                            ShareLink(item: qrFileURL) {
-                                shareActionLabel(title: String(localized: "分享二维码"), symbol: "qrcode")
+                            shareAction(title: String(localized: "分享二维码"), symbol: "qrcode") {
+                                activityItems = [qrFileURL]
+                                isActivityPresented = true
                             }
-                            .buttonStyle(ResponsivePressButtonStyle())
                         } else {
                             shareAction(title: String(localized: "分享二维码"), symbol: "qrcode") {}
                                 .disabled(true)
@@ -84,9 +89,10 @@ struct SharePayloadSheet: View {
                 }
             }
             .task(id: payload.id) { await renderQRCode() }
-            .sensoryFeedback(.success, trigger: copied)
         }
-        .presentationDetents([.large])
+        .sheet(isPresented: $isActivityPresented) {
+            ActivitySheet(items: activityItems)
+        }
     }
 
     @ViewBuilder
@@ -104,7 +110,7 @@ struct SharePayloadSheet: View {
                     .accessibilityLabel("\(payload.title) 的二维码")
                     .transition(.opacity)
             } else if qrGenerationFailed {
-                ContentUnavailableView("无法生成二维码", systemImage: "qrcode")
+                LegacyUnavailableView("无法生成二维码", systemImage: "qrcode")
             } else {
                 VStack(spacing: 12) {
                     ProgressView()

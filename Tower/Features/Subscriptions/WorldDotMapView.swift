@@ -395,12 +395,12 @@ struct WorldDotMapView: View {
                 panGesture(in: geometry.size),
                 including: viewport.scale > Viewport.minimumScale + 0.001 ? .gesture : .none
             )
-            .onChange(of: geometry.size) { _, size in
+            .onChange(of: geometry.size) { size in
                 let normalized = viewport.normalized(in: size)
                 viewport = normalized
                 displayedLevel = normalized.level
             }
-            .onChange(of: selectedMarkerID) { _, markerID in
+            .onChange(of: selectedMarkerID) { markerID in
                 guard let markerID,
                       let marker = markers.first(where: { $0.id == markerID }) else {
                     return
@@ -525,8 +525,8 @@ struct WorldDotMapView: View {
     }
 
     private func magnifyGesture(in size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
+        MagnificationGesture()
+            .onChanged { magnification in
                 isManipulatingViewport = true
                 if magnifyStartViewport == nil {
                     cancelSelectionRecenter()
@@ -534,16 +534,16 @@ struct WorldDotMapView: View {
                 }
                 guard let start = magnifyStartViewport else { return }
                 viewport = start.zoomed(
-                    to: start.scale * value.magnification,
-                    anchor: value.startAnchor,
+                    to: start.scale * magnification,
+                    anchor: .center,
                     in: size
                 )
             }
-            .onEnded { value in
+            .onEnded { magnification in
                 guard let start = magnifyStartViewport else { return }
                 let settled = start.zoomed(
-                    to: start.scale * value.magnification,
-                    anchor: value.startAnchor,
+                    to: start.scale * magnification,
+                    anchor: .center,
                     in: size
                 ).normalized(in: size)
                 magnifyStartViewport = nil
@@ -561,20 +561,24 @@ struct WorldDotMapView: View {
         presentedLabels: [PresentedLabel],
         in size: CGSize
     ) -> some Gesture {
-        SpatialTapGesture()
+        DragGesture(minimumDistance: 0)
             .onEnded { value in
+                guard abs(value.translation.width) < 8, abs(value.translation.height) < 8 else {
+                    return
+                }
+                let location = value.startLocation
                 let resetControlFrame = CGRect(
                     x: size.width - 54,
                     y: size.height - 54,
                     width: 54,
                     height: 54
                 )
-                guard !viewport.isModified || !resetControlFrame.contains(value.location) else {
+                guard !viewport.isModified || !resetControlFrame.contains(location) else {
                     return
                 }
 
                 if let itemID = LabelHitTester.markerID(
-                    at: value.location,
+                    at: location,
                     labels: presentedLabels
                 ), let item = displayItems.first(where: { $0.id == itemID }) {
                     if item.isCluster {
@@ -589,7 +593,7 @@ struct WorldDotMapView: View {
                 }
 
                 switch RegionHitTester.hit(
-                    at: value.location,
+                    at: location,
                     markers: markers,
                     grid: grid,
                     layout: layout,
@@ -615,7 +619,7 @@ struct WorldDotMapView: View {
                 }
 
                 guard let item = RegionHitTester.displayItem(
-                    at: value.location,
+                    at: location,
                     items: displayItems
                 ) else {
                     return
@@ -726,7 +730,8 @@ struct WorldDotMapView: View {
         withAnimation(.spring(response: 0.38, dampingFraction: 1)) {
             viewport = target
             displayedLevel = target.level
-        } completion: {
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
             guard selectionRecenterToken == token else { return }
             selectionRecenterToken = nil
             var transaction = Transaction()

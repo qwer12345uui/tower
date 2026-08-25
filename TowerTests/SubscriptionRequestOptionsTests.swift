@@ -340,7 +340,7 @@ final class SubscriptionRequestOptionsTests: XCTestCase {
                 group.addTask {
                     await gate.acquire(needsExclusiveAccess: false)
                     await probe.entered()
-                    try await Task.sleep(for: .milliseconds(50))
+                    try await Task.sleep(nanoseconds: 50_000_000)
                     await probe.exited()
                     await gate.release(wasExclusiveAccess: false)
                 }

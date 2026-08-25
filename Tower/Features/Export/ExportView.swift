@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ExportView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @State private var sharePayload: ExportPayload?
     @State private var directImportService = DirectImportService()
     @State private var isImporting = false
@@ -75,7 +75,6 @@ struct ExportView: View {
         }
         .sheet(item: $sharePayload) { payload in
             ActivitySheet(items: [payload.url])
-                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $isSettingsPresented) {
             ExportSettingsSheet(
@@ -87,14 +86,13 @@ struct ExportView: View {
         // down — and a name typed but never committed is simply lost. Catching
         // the flag covers every path; committing twice is harmless because the
         // draft is the same either way.
-        .onChange(of: isSettingsPresented) { _, isPresented in
+        .onChange(of: isSettingsPresented) { isPresented in
             guard !isPresented else { return }
             model.setConfigurationName(configurationNameDraft.committedName)
         }
         .fullScreenCover(item: $previewPayload) { payload in
             ConfigurationPreviewSheet(configuration: payload.configuration)
         }
-        .sensoryFeedback(.selection, trigger: selectedDestinationID)
         // Deliberately no .onDisappear teardown. Handing the link to another
         // app backgrounds Tower, and SwiftUI may call onDisappear when it does
         // — which killed the server before the client had fetched. Hiddify
@@ -161,7 +159,7 @@ struct ExportView: View {
 }
 
 private struct ExportContentModePicker: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         if model.selectedTarget.supportedContentModes.count > 1 {
@@ -203,12 +201,12 @@ private struct ExportContentModePicker: View {
 
 private struct ExportSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var configurationNameDraft: ConfigurationNameDraft
     let openLANSharing: () -> Void
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             SettingsView(
                 configurationNameDraft: $configurationNameDraft,
                 openLANSharing: openLANSharing
@@ -237,7 +235,7 @@ private struct ConfigurationPreviewPayload: Identifiable {
 }
 
 private struct ClientPicker: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Binding var isLANSharingSelected: Bool
     let activateLANSharing: () -> Void
 
@@ -267,13 +265,6 @@ private struct ClientPicker: View {
                         }
                         .buttonStyle(ResponsivePressButtonStyle())
                         .accessibilityIdentifier("client-\(target.rawValue)")
-                        .draggable(target.rawValue)
-                        .dropDestination(for: String.self) { values, _ in
-                            guard let rawValue = values.first,
-                                  let source = ClientTarget(rawValue: rawValue) else { return false }
-                            model.moveClient(source, before: target)
-                            return true
-                        }
                         .accessibilityAction(named: "向前移动") {
                             model.moveClient(target, by: -1)
                         }
@@ -286,11 +277,8 @@ private struct ClientPicker: View {
                         lanSharingButton
                     }
                 }
-                .scrollTargetLayout()
                 .padding(.vertical, 4)
             }
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
         }
     }
 
@@ -438,7 +426,7 @@ enum ProtocolFilterPolicy {
 /// needs a paid tier for AnyTLS — and Tower cannot detect that, so the choice
 /// is offered per client and only for protocols the nodes actually contain.
 private struct ProtocolFilter: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         let kinds = model.filterableKinds(for: model.selectedTarget)
@@ -499,7 +487,7 @@ private struct ProtocolSymbolBadge: View {
 }
 
 private struct ConversionSummary: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     let configuration: GeneratedConfiguration
 
     var body: some View {
@@ -576,13 +564,13 @@ private struct ConfigurationPreview: View {
 }
 
 private struct ConfigurationPreviewSheet: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let configuration: GeneratedConfiguration
     @State private var highlightedSpans: [ConfigurationSyntaxHighlighter.Span]?
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Group {
                 if let highlightedSpans {
                     ConfigurationTextView(

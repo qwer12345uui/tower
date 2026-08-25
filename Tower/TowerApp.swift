@@ -1,18 +1,19 @@
 import SwiftUI
+import UIKit
 
 @main
 struct TowerApp: App {
     // Coalesced rather than immediate: a burst of edits — ticking through the
     // node filter, reordering policy groups — becomes one write shortly after
     // the user stops, instead of a full snapshot encode inside every tap.
-    @State private var model = AppModel(persistencePolicy: .coalesced(.milliseconds(250)))
+    @StateObject private var model = AppModel(persistencePolicy: .coalesced(0.25))
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
-                .environment(model)
+                .environmentObject(model)
                 // The real use is "added a subscription on the other phone,
                 // now picked this one up", which is exactly a return to the
                 // foreground. Uploads were already automatic; without this the
@@ -23,7 +24,7 @@ struct TowerApp: App {
                     await model.synchronizeWithCloud()
                     await model.refreshOnOpenIfEnabled()
                 }
-                .onChange(of: scenePhase) { _, phase in
+                .onChange(of: scenePhase) { phase in
                     guard phase == .active else {
                         // Leaving the foreground is the last reliable moment to
                         // close the coalescing window: iOS may stop the process
@@ -42,7 +43,7 @@ struct TowerApp: App {
 }
 
 struct AppRootView: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Whether the privacy introduction has been shown. Stored rather than
     /// derived so a user who already trusts the app never sees it twice, and
@@ -67,28 +68,26 @@ struct AppRootView: View {
     }
 
     private var mainInterface: some View {
-        @Bindable var model = model
-
         return TabView(selection: $model.selectedTab) {
-            NavigationStack {
+            NavigationView {
                 SubscriptionsView()
             }
             .tag(AppTab.subscriptions)
 
-            NavigationStack {
+            NavigationView {
                 RulesView()
             }
             .tag(AppTab.rules)
 
-            NavigationStack {
+            NavigationView {
                 ExportView()
             }
             .tag(AppTab.export)
         }
-        // Keep TabView as the system page container: it retains each tab's
-        // navigation stack and does not add a competing horizontal gesture.
-        // Only the visual chrome is replaced with the floating glass control.
-        .toolbar(.hidden, for: .tabBar)
+        // Keep TabView as the system page container. PageTabViewStyle avoids
+        // the default bottom bar while leaving horizontal gesture arbitration
+        // to SwiftUI rather than introducing a competing custom drag gesture.
+        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         .tint(.accentColor)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             GlassTabBar(selection: $model.selectedTab)
@@ -111,7 +110,7 @@ extension View {
 }
 
 private struct ToastOverlay: View {
-    @Environment(AppModel.self) private var model
+    @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -132,7 +131,7 @@ private struct ToastOverlay: View {
                             : .move(edge: .top).combined(with: .opacity)
                     )
                     .task(id: toast.id) {
-                        try? await Task.sleep(for: .seconds(2.6))
+                        try? await Task.sleep(nanoseconds: 2_600_000_000)
                         model.dismissToast(id: toast.id)
                     }
             }

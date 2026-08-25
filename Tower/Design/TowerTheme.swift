@@ -75,7 +75,6 @@ struct TowerCardModifier: ViewModifier {
                     .stroke(Color.secondary.opacity(0.1), lineWidth: 0.75)
             }
             .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
-            .geometryGroup()
     }
 }
 
@@ -190,9 +189,6 @@ struct MetricPill: View {
             Text(value, format: .number)
                 .font(.title2.weight(.bold))
                 .monospacedDigit()
-                .contentTransition(
-                    reduceMotion ? .opacity : .numericText(value: Double(value))
-                )
                 .animation(
                     reduceMotion
                         ? .easeOut(duration: 0.14)
@@ -218,7 +214,7 @@ struct ToastView: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
                 .frame(width: 29, height: 29)
-                .background(accentColor.gradient, in: Circle())
+                .background(accentColor, in: Circle())
 
             Text(toast.text)
                 .font(.subheadline.weight(.semibold))
@@ -243,7 +239,6 @@ struct ToastView: View {
         }
         .shadow(color: accentColor.opacity(toast.tone == .success ? 0.2 : 0.1), radius: 14, y: 7)
         .accessibilityElement(children: .combine)
-        .sensoryFeedback(toast.tone == .success ? .success : .selection, trigger: toast.id)
         .padding(.horizontal)
     }
 
@@ -304,9 +299,7 @@ struct CheckmarkToggleStyle: ToggleStyle {
                 .contentShape(Rectangle())
         }
         .buttonStyle(SelectionIndicatorButtonStyle())
-        .accessibilityAddTraits(.isToggle)
         // Every other choice in the app taps back — the tab bar, the rule
         // list, the client picker. This one was the exception.
-        .sensoryFeedback(.selection, trigger: configuration.isOn)
     }
 }
