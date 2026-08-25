@@ -76,7 +76,7 @@ final class ExportPresentationTests: XCTestCase {
     }
 
     func testConfigurationNameDraftCanBeClearedBeforeDefaultIsCommitted() {
-        var draft = ConfigurationNameDraft(text: "塔台")
+        var draft = ConfigurationNameDraft(text: TowerBrand.localizedName)
 
         draft.text = ""
 
