@@ -13,7 +13,11 @@ final class DirectImportServiceTests: XCTestCase {
         XCTAssertEqual(surge.scheme, "surge")
         XCTAssertTrue(surge.absoluteString.hasPrefix("surge:///install-config?url="))
         XCTAssertTrue(clash.absoluteString.hasPrefix("clash://install-config?url="))
-        XCTAssertTrue(clash.absoluteString.contains("name=%E5%A1%94%E5%8F%B0"))
+        let clashComponents = try XCTUnwrap(URLComponents(url: clash, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(
+            clashComponents.queryItems?.first(where: { $0.name == "name" })?.value,
+            TowerBrand.localizedName
+        )
         XCTAssertTrue(shadowrocket.absoluteString.hasPrefix("shadowrocket://config/add/http://127.0.0.1"))
         XCTAssertTrue(loon.absoluteString.hasPrefix("loon://import?sub=http%3A%2F%2F127.0.0.1"))
     }

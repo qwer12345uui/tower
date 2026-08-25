@@ -64,23 +64,29 @@ struct AppRootView: View {
             NavigationStack {
                 SubscriptionsView()
             }
-            .tabItem { Label(AppTab.subscriptions.title, systemImage: AppTab.subscriptions.symbol) }
             .tag(AppTab.subscriptions)
 
             NavigationStack {
                 RulesView()
             }
-            .tabItem { Label(AppTab.rules.title, systemImage: AppTab.rules.symbol) }
             .tag(AppTab.rules)
 
             NavigationStack {
                 ExportView()
             }
-            .tabItem { Label(AppTab.export.title, systemImage: AppTab.export.symbol) }
             .tag(AppTab.export)
         }
+        // Keep TabView as the system page container: it retains each tab's
+        // navigation stack and does not add a competing horizontal gesture.
+        // Only the visual chrome is replaced with the floating glass control.
+        .toolbar(.hidden, for: .tabBar)
         .tint(.accentColor)
-        .sensoryFeedback(.selection, trigger: model.selectedTab)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            GlassTabBar(selection: $model.selectedTab)
+                .padding(.horizontal, TowerTheme.pagePadding)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+        }
         .towerToast()
     }
 }
