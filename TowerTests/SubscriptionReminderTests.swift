@@ -228,7 +228,7 @@ final class SubscriptionReminderTests: XCTestCase {
         XCTAssertFalse(model.iCloudSyncEnabled)
         XCTAssertFalse(downloadStore.hasCachedRules(for: remoteRuleURL))
         XCTAssertEqual(scheduler.removalCount, 1)
-        XCTAssertEqual(model.toast?.text, "所有配置已重置")
+        XCTAssertEqual(model.toast?.text, String(localized: "所有配置已重置"))
         XCTAssertEqual(model.toast?.tone, .success)
 
         let saved = try XCTUnwrap(persistence.load())

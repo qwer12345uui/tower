@@ -525,7 +525,7 @@ final class RuleCustomizationTests: XCTestCase {
         let finalIndex = try XCTUnwrap(groupNames.firstIndex(of: "漏网之鱼"))
         XCTAssertLessThan(try XCTUnwrap(groupNames.firstIndex(of: "第一条")), finalIndex)
         XCTAssertLessThan(try XCTUnwrap(groupNames.firstIndex(of: "第二条")), finalIndex)
-        XCTAssertEqual(model.toast?.text, "已添加“第二条”到当前规则")
+        XCTAssertEqual(model.toast?.text, String(localized: "已添加“\(second.name)”到当前规则"))
         XCTAssertEqual(model.toast?.symbol, "checkmark.circle.fill")
         XCTAssertEqual(model.toast?.tone, .success)
     }
